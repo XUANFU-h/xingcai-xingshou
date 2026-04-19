@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>星裁系统 · 现场实时大屏</title>
+    <style>
+        :root { --bg-color: #050505; --text-main: #ffffff; --accent-gold: #f1c40f; --panel-bg: rgba(255, 255, 255, 0.03); --border-color: rgba(255, 255, 255, 0.1); }
+        body { margin: 0; padding: 0; background-color: var(--bg-color); background-image: radial-gradient(circle at center, #1a1a2e 0%, #050505 100%); color: var(--text-main); font-family: "PingFang SC", "Microsoft YaHei", sans-serif; height: 100vh; overflow: hidden; display: flex; background-size: cover; background-position: center; transition: background 1s ease;}
+
+        #standby-mask { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; display: flex; justify-content: center; align-items: center; font-size: 80px; font-weight: 900; letter-spacing: 10px; color: #4b6584; transition: opacity 0.8s ease; backdrop-filter: blur(10px); }
+
+        /* 🚀 恢复原版经典布局：左35%档案，右65%得分 */
+        .main-container { display: flex; width: 100%; height: 100%; padding: 60px 80px; box-sizing: border-box; gap: 60px; }
+        .left-panel { flex: 0 0 35%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+
+        .photo-wrapper { width: 80%; aspect-ratio: 3 / 4; border-radius: 15px; overflow: hidden; border: 5px solid var(--border-color); box-shadow: 0 20px 50px rgba(0,0,0,0.8); margin-bottom: 40px; position: relative; background: #111; }
+        .photo-wrapper img { width: 100%; height: 100%; object-fit: cover; }
+        .singer-name { font-size: 85px; font-weight: 900; margin: 0 0 15px 0; letter-spacing: 5px; text-shadow: 0 5px 15px rgba(0,0,0,0.8); }
+        .singer-song { font-size: 45px; color: #bdc3c7; margin: 0; font-weight: 300; font-style: italic; }
+
+        .right-panel { flex: 1; display: flex; flex-direction: column; justify-content: space-between; padding: 20px 0; }
+        .final-score-box { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .final-title { font-size: 45px; color: #95a5a6; letter-spacing: 8px; margin-bottom: -20px; z-index: 10;}
+        .final-value { font-size: 240px; font-weight: 900; color: var(--accent-gold); line-height: 1; text-shadow: 0 10px 40px rgba(241, 196, 15, 0.4); font-variant-numeric: tabular-nums; }
+        .final-unit { font-size: 80px; color: var(--accent-gold); margin-left: 10px; }
+
+        .breakdown-box { display: flex; justify-content: space-between; gap: 40px; height: 35%; }
+        .sub-score-card { flex: 1; background: var(--panel-bg); border: 2px solid var(--border-color); border-radius: 20px; padding: 30px; display: flex; flex-direction: column; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); position: relative; }
+        .sub-title { font-size: 35px; color: #ecf0f1; margin-bottom: 10px; }
+        .sub-value { font-size: 80px; font-weight: bold; color: #fff; margin-bottom: 20px; line-height: 1;}
+
+        .detail-grid { display: grid; grid-template-columns: 1fr 1fr; width: 100%; gap: 15px; opacity: 0; transition: opacity 0.5s ease; }
+        .detail-grid.show { opacity: 1; }
+        .detail-item { font-size: 22px; color: #bdc3c7; display: flex; justify-content: space-between; background: rgba(255,255,255,0.05); padding: 10px 20px; border-radius: 8px; }
+        .detail-item span:last-child { color: var(--accent-gold); font-weight: bold; }
+
+        /* 大屏覆盖层，确保内部元素不溢出 */
+        #leaderboard-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10, 10, 15, 0.98); z-index: 10000; display: none; flex-direction: column; align-items: center; justify-content: flex-start; backdrop-filter: blur(15px); opacity: 0; transition: opacity 0.5s; box-sizing: border-box; padding: 3% 5%; }
+        #leaderboard-overlay.show { opacity: 1; }
+        .lb-title { font-size: 4vh; color: var(--accent-gold); margin-bottom: 2%; letter-spacing: 10px; font-weight: 900; text-shadow: 0 0 30px rgba(241,196,15,0.5); flex-shrink: 0; }
+
+    </style>
+</head>
+<body>
+
+<div id="standby-mask">等待导播指令</div>
+
+<div id="leaderboard-overlay">
+    <div class="lb-title" id="overlay-title">✨ 选手矩阵</div>
+</div>
+
+<div class="main-container">
+    <div class="left-panel">
+        <div class="photo-wrapper"><img id="singer-photo" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="照片"></div>
+        <h1 class="singer-name" id="singer-name">--</h1>
+        <h2 class="singer-song" id="singer-song">《--》</h2>
+    </div>
+    <div class="right-panel">
+        <div class="final-score-box">
+            <div class="final-title">最终得分</div>
+            <div><span class="final-value" id="final-score">--.--</span><span class="final-unit">分</span></div>
+        </div>
+        <div class="breakdown-box">
+            <div class="sub-score-card">
+                <div class="sub-title">专业评委 (<span id="weight-judge">60</span>%)</div>
+                <div class="sub-value" id="judge-avg">--.--</div>
+                <div class="detail-grid" id="judge-details"></div>
+            </div>
+            <div class="sub-score-card">
+                <div class="sub-title">大众评委 (<span id="weight-student">40</span>%)</div>
+                <div class="sub-value" id="student-avg">--.--</div>
+                <div class="detail-grid" id="student-details"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const currentHost = window.location.host;
+    const isHttps = window.location.protocol === 'https:';
+    const wsUrl = (isHttps ? 'wss://' : 'ws://') + currentHost + '/ws/screen';
+
+    function animateValue(element, start, end, duration) {
+        if(isNaN(end) || end <= 0) { element.innerText = "--.--"; return; }
+        let startTimestamp = null;
+        const step = (timestamp) => {
+            if (!startTimestamp) startTimestamp = timestamp;
+            const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+            const easeOutProgress = 1 - Math.pow(1 - progress, 3);
+            element.innerText = (easeOutProgress * (end - start) + start).toFixed(2);
+            if (progress < 1) window.requestAnimationFrame(step);
+            else element.innerText = end.toFixed(2);
+        };
+        window.requestAnimationFrame(step);
+    }
+
+    function getRandomElements(arr, count) {
+        let shuffled = arr.slice(0), i = arr.length, min = i - count, temp, index;
+        while (i-- > min) { index = Math.floor((i + 1) * Math.random()); temp = shuffled[index]; shuffled[index] = shuffled[i]; shuffled[i] = temp; }
+        return shuffled.slice(min);
+    }
+
+    function closeLeaderboard() {
+        const overlay = document.getElementById('leaderboard-overlay');
+        overlay.classList.remove('show');
+        setTimeout(() => overlay.style.display = 'none', 500);
+    }
+
+    function connectWebSocket() {
+        const ws = new WebSocket(wsUrl);
+        ws.onmessage = function(event) {
+            const cmd = JSON.parse(event.data);
+
+            if (cmd.type === 'PLAY_SFX') {
+                let audio = new Audio(cmd.url);
+                audio.play();
+            }
+
+            if (cmd.type === 'SHOW_SINGER') {
+                closeLeaderboard();
+                document.getElementById('standby-mask').style.opacity = '0';
+                setTimeout(() => document.getElementById('standby-mask').style.display = 'none', 800);
+
+                // 🚀 兼容获取唯一选手的档案信息
+                let singerData = null;
+                if (cmd.singers && Array.isArray(cmd.singers) && cmd.singers.length > 0) {
+                    singerData = cmd.singers[0];
+                } else if (cmd.data) {
+                    singerData = Array.isArray(cmd.data) ? cmd.data[0] : cmd.data;
+                }
+
+                if(singerData) {
+                    document.getElementById('singer-name').innerText = singerData.name || "--";
+                    document.getElementById('singer-song').innerText = singerData.songName ? `《${singerData.songName}》` : "《未知曲目》";
+
+                    let photoUrl = singerData.photoUrl || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+                    if (photoUrl.includes('localhost')) {
+                        photoUrl = photoUrl.replace(/http:\/\/localhost:\d+/g, '');
+                    }
+                    document.getElementById('singer-photo').src = photoUrl;
+                }
+
+                if(cmd.judgeWeight) {
+                    document.getElementById('weight-judge').innerText = parseInt(cmd.judgeWeight);
+                    document.getElementById('weight-student').innerText = 100 - parseInt(cmd.judgeWeight);
+                }
+
+                document.getElementById('final-score').innerText = "--.--";
+                document.getElementById('judge-avg').innerText = "--.--";
+                document.getElementById('student-avg').innerText = "--.--";
+                document.getElementById('judge-details').innerHTML = "";
+                document.getElementById('student-details').innerHTML = "";
+            }
+
+            else if (cmd.type === 'PUBLISH_SCORE') {
+                closeLeaderboard();
+
+                // 🚀 兼容获取唯一的赛果对象
+                let target = null;
+                if (cmd.ranks && cmd.ranks.length > 0) target = cmd.ranks[0].data;
+                else if (cmd.data) target = cmd.data;
+
+                if(target) {
+                    const finalScore = parseFloat(target.finalScore || 0);
+                    const judgeAvg = parseFloat(target.judgeAvgScore || 0);
+                    const studentAvg = parseFloat(target.studentAvgScore || 0);
+
+                    animateValue(document.getElementById('final-score'), 0, finalScore, 2000);
+                    animateValue(document.getElementById('judge-avg'), 0, judgeAvg, 1500);
+                    animateValue(document.getElementById('student-avg'), 0, studentAvg, 1500);
+
+                    const details = target.details || [];
+                    if(details.length > 0) {
+                        const judgeDetails = details.filter(d => d.judgeType === 'JUDGE');
+                        const studentDetails = details.filter(d => d.judgeType === 'STUDENT');
+                        const randomJudges = getRandomElements(judgeDetails, Math.min(4, judgeDetails.length));
+                        const randomStudents = getRandomElements(studentDetails, Math.min(4, studentDetails.length));
+                        let jHtml = '', sHtml = '';
+                        randomJudges.forEach((d, i) => { jHtml += `<div class="detail-item"><span>评委 ${i+1}</span><span>${d.scoreValue}分</span></div>`; });
+                        randomStudents.forEach((d, i) => { sHtml += `<div class="detail-item"><span>大众 ${i+1}</span><span>${d.scoreValue}分</span></div>`; });
+                        document.getElementById('judge-details').innerHTML = jHtml;
+                        document.getElementById('student-details').innerHTML = sHtml;
+                    }
+                }
+            }
+
+            else if (cmd.type === 'TOGGLE_VISIBILITY') {
+                const el = document.getElementById(cmd.target === 'JUDGE' ? 'judge-details' : 'student-details');
+                if (cmd.show) el.classList.add('show'); else el.classList.remove('show');
+            }
+
+            else if (cmd.type === 'CHANGE_BG') {
+                let bgUrl = cmd.url;
+                if (bgUrl.includes('localhost')) { bgUrl = bgUrl.replace(/http:\/\/localhost:\d+/g, ''); }
+                document.body.style.backgroundImage = `url('${bgUrl}')`;
+            }
+
+            else if (cmd.type === 'SHOW_GROUP') {
+                const overlay = document.getElementById('leaderboard-overlay');
+                document.getElementById('overlay-title').innerText = "✨ 选手出场阵列";
+
+                let oldClimb = document.getElementById('climb-container'); if(oldClimb) oldClimb.remove();
+                let oldGrid = document.getElementById('group-grid-container'); if(oldGrid) oldGrid.remove();
+
+                let gridHtml = `<div id="group-grid-container" style="display:grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); gap: 2vw; width: 100%; flex: 1; min-height: 0;">`;
+
+                cmd.list.forEach(c => {
+                    let photo = c.photoUrl || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+                    if (photo.includes('localhost')) photo = photo.replace(/http:\/\/localhost:\d+/g, '');
+
+                    gridHtml += `
+                    <div style="background: rgba(255,255,255,0.05); border: 2px solid var(--border-color); border-radius: 1.5vh; display: flex; flex-direction: column; align-items: center; padding: 1.5vh; box-sizing: border-box; overflow: hidden; height: 100%;">
+
+                        <div style="flex: 1; width: 100%; display: flex; justify-content: center; align-items: center; min-height: 0; margin-bottom: 1vh;">
+                            <img src="${photo}" style="height: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 1vh; border: 2px solid var(--border-color); box-shadow: 0 5px 15px rgba(0,0,0,0.5);">
+                        </div>
+
+                        <div style="font-size: 3vh; font-weight: bold; color: var(--accent-gold); margin-bottom: 0.5vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; text-align: center; flex-shrink: 0;">${c.name}</div>
+
+                        <div style="font-size: 1.8vh; color: #bdc3c7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; text-align: center; flex-shrink: 0;">${c.songName ? '《'+c.songName+'》' : '&nbsp;'}</div>
+                    </div>`;
+                });
+                gridHtml += `</div>`;
+
+                overlay.insertAdjacentHTML('beforeend', gridHtml);
+                overlay.style.display = 'flex'; void overlay.offsetWidth; overlay.classList.add('show');
+            }
+
+            else if (cmd.type === 'SHOW_CLIMB') {
+                const overlay = document.getElementById('leaderboard-overlay');
+                document.getElementById('overlay-title').innerText = "🏆 实时英雄榜";
+
+                let oldGrid = document.getElementById('group-grid-container'); if(oldGrid) oldGrid.remove();
+                let oldClimb = document.getElementById('climb-container'); if(oldClimb) oldClimb.remove();
+
+                const sorted = cmd.list.sort((a,b) => b.finalScore - a.finalScore).filter(c => c.finalScore > 0);
+
+                let pyramid = [];
+                for(let i = 0; i < sorted.length; i++) {
+                    if(i % 2 === 0) pyramid.push(sorted[i]);
+                    else pyramid.unshift(sorted[i]);
+                }
+
+                let climbHtml = `<div id="climb-container" style="display:flex; align-items:flex-end; justify-content:center; gap:20px; height: 75vh; width: 100%; padding: 0 40px; box-sizing:border-box;">`;
+
+                pyramid.forEach(c => {
+                    let realRank = sorted.findIndex(x => x.id === c.id) + 1;
+                    let heightPercent = 100 - (realRank - 1) * 9;
+                    if(heightPercent < 30) heightPercent = 30;
+
+                    let photo = c.photoUrl || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+                    if (photo.includes('localhost')) photo = photo.replace(/http:\/\/localhost:\d+/g, '');
+
+                    climbHtml += `
+                    <div style="display:flex; flex-direction:column; align-items:center; height: ${heightPercent}%; flex:1; max-width: 140px; transition: all 1s cubic-bezier(0.34, 1.56, 0.64, 1);">
+                        <img src="${photo}" style="width: 90px; height: 90px; border-radius: 50%; border: 4px solid var(--accent-gold); object-fit: cover; margin-bottom: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.5);">
+                        <span style="color:white; font-weight:bold; font-size: 26px; text-align:center; margin-bottom:10px; text-shadow: 0 2px 5px rgba(0,0,0,0.8);">${c.name}</span>
+                        <div style="flex:1; width: 100%; background: linear-gradient(to top, rgba(241,196,15,0.9), rgba(241,196,15,0.2)); border-radius: 15px 15px 0 0; display:flex; flex-direction:column; align-items:center; padding-top: 20px; box-shadow: inset 0 5px 15px rgba(255,255,255,0.4), 0 10px 30px rgba(241,196,15,0.3);">
+                            <span style="color:white; font-size:40px; font-weight:900; text-shadow: 0 4px 10px rgba(0,0,0,0.5);">#${realRank}</span>
+                            <span style="color:white; font-size:24px; font-weight:bold; margin-top:8px;">${c.finalScore.toFixed(2)}</span>
+                        </div>
+                    </div>`;
+                });
+                climbHtml += `</div>`;
+
+                overlay.insertAdjacentHTML('beforeend', climbHtml);
+                overlay.style.display = 'flex'; void overlay.offsetWidth; overlay.classList.add('show');
+            }
+        };
+        ws.onclose = function() { setTimeout(connectWebSocket, 3000); };
+    }
+    window.onload = connectWebSocket;
+</script>
+</body>
+</html>

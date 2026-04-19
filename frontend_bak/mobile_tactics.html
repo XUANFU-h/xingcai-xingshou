@@ -1,0 +1,1752 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>星守系统 · 战术终端</title>
+  <script src="lib/vue.global.js"></script>
+  <script src="lib/tailwindcss.js"></script>
+  <style>
+    :root {
+      --glass-bg: rgba(255, 255, 255, 0.04);
+      --glass-border: rgba(255, 255, 255, 0.12);
+      --glass-inner: rgba(0, 0, 0, 0.25);
+      --apple-blue: #0A84FF; --apple-orange: #FF9F0A; --apple-red: #FF453A; --apple-green: #32D74B;
+    }
+    body { margin: 0; background: radial-gradient(circle at 50% -20%, #1a1a2e 0%, #050505 80%); color: #fff; font-family: -apple-system, sans-serif; height: 100vh; height: 100dvh; overflow: hidden; -webkit-tap-highlight-color: transparent; }
+    ::-webkit-scrollbar { display: none; }
+    .btn-press { transition: transform 0.1s, opacity 0.1s; cursor: pointer; user-select: none; } .btn-press:active { transform: scale(0.95); opacity: 0.8; }
+    .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; } .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+    /* ================= ✨核心美学：液态玻璃与嵌套圆角规则 ================= */
+    .glass-outer {
+      background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 20px; padding: 4px;
+      backdrop-filter: blur(25px) saturate(150%); -webkit-backdrop-filter: blur(25px) saturate(150%);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.08); box-sizing: border-box;
+    }
+    .glass-inner {
+      background: var(--glass-inner); border-radius: 16px; box-sizing: border-box;
+      border: 1px solid rgba(0,0,0,0.2); box-shadow: inset 0 4px 10px rgba(0,0,0,0.3);
+    }
+
+    /* ================= 🛸登录页：高级输入框 (缩小优化版) ================= */
+    .input-group { position: relative; width: 100%; margin-bottom: 16px; }
+    .input-group .input { border: solid 1.5px #555; border-radius: 1rem; background: none; padding: 0.8rem; font-size: 0.95rem; color: #f5f5f5; transition: border 150ms cubic-bezier(0.4,0,0.2,1); width: 100%; box-sizing: border-box; outline: none; text-align: center; letter-spacing: 2px;}
+    .input-group .user-label { position: absolute; left: 15px; color: #aaa; pointer-events: none; transform: translateY(0.8rem); font-size: 0.95rem; transition: 150ms cubic-bezier(0.4,0,0.2,1); }
+    .input-group .input:focus, .input-group .input:valid, .input-group .user-label.floating { border: 1.5px solid var(--apple-blue); }
+    .input-group .input:focus ~ .user-label, .input-group .input:valid ~ .user-label, .input-group .user-label.floating { transform: translateY(-50%) scale(0.8); background-color: #0a0a0c; padding: 0 .2em; color: var(--apple-blue); left: 10px;}
+
+    .auth-links { display: flex; justify-content: space-between; width: 100%; margin-top: 15px; font-size: 13px; color: #aaa; padding: 0 10px; box-sizing: border-box;}
+    .auth-links span { cursor: pointer; transition: color 0.2s; }
+    .auth-links span:hover { color: var(--apple-blue); }
+
+    /* ================= 🕹️灵动岛与HUD ================= */
+    .safe-top-y { top: max(env(safe-area-inset-top), 8px); }
+
+    .dynamic-island { position: absolute; left: 15px; z-index: 150; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); overflow: hidden; width: 140px; height: 54px; transform-origin: top left;}
+    .dynamic-island.expanded { width: 240px; height: 215px; background: rgba(20,20,25,0.95); border-color: rgba(255,255,255,0.2); box-shadow: 0 20px 40px rgba(0,0,0,0.8);}
+
+    .capsule-hud { position: absolute; right: 15px; z-index: 150; height: 54px;}
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 8px currentColor; margin-top: 4px; }
+
+    /* ================= 🗺️底部导航栏 ================= */
+    .nav-container { position: fixed; bottom: max(env(safe-area-inset-bottom), 20px); left: 50%; transform: translateX(-50%); z-index: 100; }
+    .glass-radio-group { --bg: rgba(255, 255, 255, 0.06); --text: #a1a1aa; display: flex; position: relative; background: var(--bg); border-radius: 1.2rem; backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); box-shadow: inset 1px 1px 4px rgba(255, 255, 255, 0.1), inset -1px -1px 6px rgba(0, 0, 0, 0.4), 0 10px 20px rgba(0, 0, 0, 0.5); overflow: hidden; width: 320px; }
+    .glass-radio-group input { display: none; }
+    .glass-radio-group label { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 15px; padding: 1rem 0; cursor: pointer; font-weight: bold; color: var(--text); position: relative; z-index: 2; transition: color 0.3s; }
+    .glass-radio-group input:checked + label { color: #fff; }
+    .glass-glider { position: absolute; top: 0; bottom: 0; width: calc(100% / 3); border-radius: 1.2rem; z-index: 1; transition: transform 0.5s cubic-bezier(0.37, 1.95, 0.66, 0.56), background 0.4s, box-shadow 0.4s; }
+
+    #tab-channel:checked ~ .glass-glider { transform: translateX(0%); background: linear-gradient(135deg, rgba(10,132,255,0.4), rgba(10,132,255,0.8)); box-shadow: 0 0 15px rgba(10,132,255,0.5), inset 0 0 10px rgba(255,255,255,0.3); }
+    #tab-home:checked ~ .glass-glider { transform: translateX(100%); background: linear-gradient(135deg, rgba(50,215,75,0.4), rgba(50,215,75,0.8)); box-shadow: 0 0 15px rgba(50,215,75,0.5), inset 0 0 10px rgba(255,255,255,0.3); }
+    #tab-tasks:checked ~ .glass-glider { transform: translateX(200%); background: linear-gradient(135deg, rgba(255,159,10,0.4), rgba(255,159,10,0.8)); box-shadow: 0 0 15px rgba(255,159,10,0.5), inset 0 0 10px rgba(255,255,255,0.3); }
+
+    /* ================= 完美的待办事项 CSS 1:1 无损移植 ================= */
+    .tasks-wrapper, #t-input-area, #t-edit-area, #t-priority-popover {
+      --t-text-main: #FFFFFF;
+      --t-text-sub: rgba(255, 255, 255, 0.4);
+      --t-accent-blue: #5E5CE6;
+      --t-accent-red: #FF453A;
+      --t-bg-green: #34C759;
+      --t-bg-yellow: #FFCC00;
+      --t-bg-orange: #FF9500;
+      --t-bg-red: #FF3B30;
+      --t-border-color: rgba(255, 255, 255, 0.1);
+      --t-radius-outer: 20px;
+      --t-radius-inner: 16px;
+      --t-padding-nest: 4px;
+    }
+
+    .t-glass-outer { background: rgba(30, 30, 30, 0.45); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); border: 1px solid var(--t-border-color); border-radius: var(--t-radius-outer); padding: var(--t-padding-nest); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); position: relative; overflow: hidden; box-sizing: border-box; }
+    .t-glass-inner { background: rgba(255, 255, 255, 0.05); border-radius: var(--t-radius-inner); padding: 12px 16px; box-sizing: border-box; }
+
+    #t-empty-state { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: var(--t-text-sub); font-size: 16px; pointer-events: none;}
+
+    .task-ul { list-style: none; display: flex; flex-direction: column; gap: 15px; padding:0; margin:0; }
+
+    .completed-header { display: flex; justify-content: space-between; align-items: center; color: var(--t-text-sub); font-size: 16px; font-weight: 500; padding: 10px 4px; margin-top: 10px; cursor: pointer; }
+    .completed-header .count-wrapper { display: flex; align-items: center; gap: 8px; }
+    .toggle-icon { font-size: 14px; transition: transform 0.3s; }
+    .toggle-icon.collapsed { transform: rotate(-90deg); }
+
+    .swipeable-content { position: relative; z-index: 2; transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); background: rgba(45, 45, 45, 0.95); user-select: none; -webkit-user-select: none; }
+    .swipe-actions-bg { position: absolute; top: var(--t-padding-nest); bottom: var(--t-padding-nest); border-radius: var(--t-radius-inner); overflow: hidden; z-index: 1; opacity: 0; display: flex; width: 0px; }
+    .action-left-side { left: var(--t-padding-nest); justify-content: flex-start; }
+    .action-right-side { right: var(--t-padding-nest); justify-content: flex-end; }
+
+    .action-btn { flex: 1; height: 100%; display: flex; justify-content: center; align-items: center; cursor: pointer; overflow: hidden; }
+    .action-btn img { width: 24px; height: 24px; flex-shrink: 0; pointer-events: none; }
+
+    .bg-green { background-color: var(--t-bg-green); }
+    .bg-yellow { background-color: var(--t-bg-yellow); }
+    .bg-orange { background-color: var(--t-bg-orange); }
+    .bg-red { background-color: var(--t-bg-red); }
+
+    .task-item { display: flex; align-items: flex-start; }
+    .task-checkbox { width: 20px; height: 20px; border: 2px solid var(--t-text-sub); border-radius: 6px; margin-right: 12px; margin-top: 2px; flex-shrink: 0; display: flex; justify-content: center; align-items: center; cursor: pointer; }
+    .task-checkbox.high-priority { border-color: var(--t-accent-red); background-color: rgba(255, 69, 58, 0.1); }
+    .task-item.completed { opacity: 0.5; }
+    .task-checkbox.completed { background-color: var(--t-text-sub); border-color: var(--t-text-sub); }
+    .task-checkbox.completed::after { content: '✓'; color: #000; font-size: 12px; font-weight: bold; }
+
+    .task-content { flex: 1; cursor: pointer; }
+    .task-title { font-size: 16px; font-weight: 500; margin-bottom: 4px; color: var(--t-text-main); }
+    .task-desc { font-size: 13px; color: var(--t-text-sub); }
+
+    #t-fab { position: fixed; bottom: 100px; right: 20px; width: 56px; height: 56px; background-color: transparent; border: none; box-shadow: none; display: flex; justify-content: center; align-items: center; cursor: pointer; z-index: 100; transition: transform 0.2s; padding:0;}
+    #t-fab:active { transform: scale(0.92); }
+    #t-fab img { width: 56px; height: 56px; object-fit: contain; pointer-events: none;}
+
+    .t-bottom-sheet { position: fixed; bottom: 20px; left: 10px; right: 10px; z-index: 200; transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s; transform: translateY(150%); opacity: 0; pointer-events: none; }
+    .t-bottom-sheet.active { transform: translateY(0); opacity: 1; pointer-events: auto; }
+
+    .input-layout { display: flex; align-items: center; gap: 12px; }
+    .icon-btn { width: 32px; height: 32px; border-radius: 8px; display: flex; justify-content: center; align-items: center; cursor: pointer; background: rgba(255,255,255,0.08); }
+    .icon-btn img { width: 20px; height: 20px; pointer-events: none;}
+    .submit-btn { background: var(--t-accent-blue); }
+
+    .input-fields { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+    .input-fields input { background: transparent; border: none; color: var(--t-text-main); outline: none; width: 100%; }
+    #title-input { font-size: 16px; font-weight: 500; }
+    #title-input::placeholder { color: var(--t-text-sub); }
+    .input-fields input:not(#title-input)::placeholder { color: var(--t-text-sub); font-size: 14px; }
+
+    .edit-header { display: flex; align-items: center; gap: 12px; margin-bottom: 15px; }
+    .edit-flag-btn { width: 26px; height: 26px; border-radius: 6px; display: flex; justify-content: center; align-items: center; cursor: pointer; background: rgba(255,255,255,0.08); }
+    .edit-flag-btn img { width: 16px; height: 16px; pointer-events: none; }
+    .edit-body { padding-left: 36px; display: flex; flex-direction: column; gap: 10px; }
+    #edit-title { font-size: 20px; font-weight: 600; background: transparent; border: none; color: var(--t-text-main); outline: none; width: 100%; }
+    #edit-title::placeholder { color: var(--t-text-sub); }
+    .edit-body textarea { font-size: 15px; color: var(--t-text-sub); background: transparent; border: none; outline: none; width: 100%; resize: none; min-height: 60px; font-family: inherit; }
+    .edit-body textarea::placeholder { color: var(--t-text-sub); }
+
+    #t-priority-popover { position: fixed; bottom: 115px; left: 10px; width: 160px; z-index: 300; display: none; flex-direction: column; }
+    #t-priority-popover.active { display: flex; }
+    .priority-option { display: flex; align-items: center; gap: 10px; padding: 10px 0; font-size: 15px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05); color: var(--t-text-main);}
+    .priority-option:last-child { border-bottom: none; }
+    .priority-option img { width: 18px; height: 18px; pointer-events: none; }
+
+    #t-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 150; display: none; pointer-events: auto; }
+    #t-overlay.active { display: block; }
+
+    /* 量子动画 */
+    @keyframes quantumFadeIn { 0% { transform: scale(0.1); opacity: 0; filter: blur(20px); } 50% { transform: scale(1.1); opacity: 0.9; filter: blur(2px); } 100% { transform: scale(1); opacity: 1; filter: blur(0px); } }
+    .quantum-logo { animation: quantumFadeIn 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .sos-flash { animation: sosAlert 1s infinite; } @keyframes sosAlert { 0%, 100% { box-shadow: inset 0 0 0 0 rgba(255, 69, 58, 0); } 50% { box-shadow: inset 0 0 50px 10px rgba(255, 69, 58, 0.5); } }
+
+    /* 通用弹窗与提示：调整 toast 高度避免被下移的头部遮挡 */
+    .toast { position: fixed; top: max(env(safe-area-inset-top), 85px); left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.95); color: black; padding: 12px 24px; border-radius: 30px; font-size: 14px; font-weight: bold; z-index: 9999999; box-shadow: 0 10px 20px rgba(0,0,0,0.2); pointer-events: none;}
+    .chat-log-enter-active, .chat-log-leave-active { transition: all 0.3s; } .chat-log-enter-from { opacity: 0; transform: translateY(10px); }
+  </style>
+</head>
+<body>
+
+<div id="app" class="w-full h-full relative" v-cloak>
+
+  <transition name="fade">
+    <div v-if="!isLogged" class="absolute inset-0 z-[200] bg-[#0a0a0c] flex flex-col items-center justify-center p-6 overflow-y-auto">
+
+      <template v-if="authView === 'login'">
+        <img src="assets/XSlogo.webp" class="quantum-logo w-44 mb-5 drop-shadow-[0_0_20px_rgba(10,132,255,0.5)]" onerror="this.style.display='none'">
+        <h2 class="text-white/90 font-bold text-xl mb-8 tracking-widest whitespace-nowrap text-center">星守系统 · 工作人员终端</h2>
+      </template>
+      <h2 v-else-if="authView === 'register'" class="text-blue-400 font-black text-2xl mb-8 tracking-widest mt-10">终端接入注册</h2>
+      <h2 v-else-if="authView === 'forgot_request'" class="text-orange-400 font-black text-2xl mb-8 tracking-widest mt-10">忘记密码请求</h2>
+
+      <div class="glass-outer w-full max-w-xs">
+
+        <div v-if="authView === 'login'" class="glass-inner p-5 flex flex-col items-center">
+          <div class="input-group mt-1">
+            <input required type="text" v-model="loginForm.name" class="input">
+            <label class="user-label">姓名</label>
+          </div>
+          <div class="input-group">
+            <input required type="text" :value="loginForm.studentNo" @input="e => loginForm.studentNo = e.target.value.replace(/\D/g, '').slice(0, 10)" class="input" style="font-family: monospace;">
+            <label class="user-label">长学号</label>
+          </div>
+          <div class="input-group">
+            <input required type="password" v-model="loginForm.pwd" class="input" style="font-family: monospace;">
+            <label class="user-label">登录密码</label>
+          </div>
+          <button @click="doLogin" :disabled="isLoggingIn" class="btn-press w-full bg-gradient-to-r from-blue-600 to-blue-400 text-white rounded-xl py-3 font-bold text-base shadow-[0_5px_20px_rgba(10,132,255,0.4)] mt-1 flex items-center justify-center gap-2">
+            <span v-if="isLoggingIn" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+            {{ isLoggingIn ? '双擎核验中...' : '认证并接入网络' }}
+          </button>
+          <div class="auth-links">
+            <span @click="authView = 'register'">用户注册</span>
+            <span @click="authView = 'forgot_request'">忘记密码</span>
+          </div>
+        </div>
+
+        <div v-else-if="authView === 'register'" class="glass-inner p-5 flex flex-col items-center">
+          <div class="input-group mt-1">
+            <input required type="text" v-model="regForm.name" class="input">
+            <label class="user-label">真实姓名</label>
+          </div>
+          <div class="input-group">
+            <input required type="text" :value="regForm.studentNo" @input="e => regForm.studentNo = e.target.value.replace(/\D/g, '').slice(0, 10)" class="input" style="font-family: monospace;">
+            <label class="user-label">长学号</label>
+          </div>
+          <div class="input-group">
+            <input required type="password" v-model="regForm.pwd" class="input" style="font-family: monospace;">
+            <label class="user-label">设置密码</label>
+          </div>
+
+          <button @click="doRegister" :disabled="isRequesting" class="btn-press w-full bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl py-3 font-bold text-base shadow-[0_5px_20px_rgba(10,132,255,0.4)] mt-2 relative z-0">
+            确认注册
+          </button>
+          <div class="w-full text-center mt-4">
+            <span @click="authView = 'login'" class="text-white/40 text-xs cursor-pointer hover:text-white">返回登录页</span>
+          </div>
+        </div>
+
+        <div v-else-if="authView === 'forgot_request'" class="glass-inner p-5 flex flex-col items-center">
+          <div class="input-group mt-1">
+            <input required type="text" v-model="forgotForm.name" class="input">
+            <label class="user-label">姓名</label>
+          </div>
+          <div class="input-group">
+            <input required type="text" :value="forgotForm.studentNo" @input="e => forgotForm.studentNo = e.target.value.replace(/\D/g, '').slice(0, 10)" class="input" style="font-family: monospace;">
+            <label class="user-label">长学号</label>
+          </div>
+          <button @click="doForgotRequest" :disabled="isRequesting" class="btn-press w-full bg-gradient-to-r from-orange-600 to-red-500 text-white rounded-xl py-3 font-bold text-base shadow-[0_5px_20px_rgba(255,69,58,0.4)] mt-2">
+            提交重置申请
+          </button>
+          <div class="w-full text-center mt-4">
+            <span @click="authView = 'login'" class="text-white/40 text-xs cursor-pointer hover:text-white">返回登录页</span>
+          </div>
+        </div>
+
+        <div v-else-if="authView === 'wait_approve'" class="glass-inner p-8 flex flex-col items-center text-center">
+          <div class="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-6"></div>
+          <h3 class="text-white font-bold text-lg mb-2">注册已提交</h3>
+          <p class="text-white/50 text-xs leading-relaxed">正在等待导播总台审批<br>审批通过后将自动跳转</p>
+          <button @click="authView = 'login'" class="mt-6 text-[10px] bg-white/10 px-3 py-1.5 rounded text-white/50 btn-press">返回登录</button>
+        </div>
+
+        <div v-else-if="authView === 'wait_reset'" class="glass-inner p-8 flex flex-col items-center text-center">
+          <div class="w-12 h-12 border-4 border-orange-500/30 border-t-orange-500 rounded-full animate-spin mb-6"></div>
+          <h3 class="text-orange-400 font-bold text-lg mb-2">等待重置</h3>
+          <p class="text-white/50 text-xs leading-relaxed">已向总台发送强制重置请求<br>等待后台放行...</p>
+          <button @click="authView = 'login'" class="mt-6 text-[10px] bg-white/10 px-3 py-1.5 rounded text-white/50 btn-press">取消申请并返回</button>
+        </div>
+
+        <div v-else-if="authView === 'reset_pwd'" class="glass-inner p-5 flex flex-col items-center">
+          <h3 class="text-green-400 font-bold mb-4 text-sm">✓ 请求已放行</h3>
+          <div class="input-group">
+            <input required type="password" v-model="resetForm.pwd" class="input" style="font-family: monospace;">
+            <label class="user-label">新登录密码</label>
+          </div>
+          <div class="input-group">
+            <input required type="password" v-model="resetForm.confirmPwd" class="input" style="font-family: monospace;">
+            <label class="user-label">二次确认密码</label>
+          </div>
+          <button @click="doResetConfirm" class="btn-press w-full bg-green-600 text-white rounded-xl py-3 font-bold text-base shadow-[0_5px_20px_rgba(50,215,75,0.4)] mt-2">
+            确认并进入系统
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </transition>
+
+  <div v-if="isLogged" class="w-full h-full relative flex flex-col" :class="{'sos-flash': isSosFlashing}">
+
+    <transition name="fade">
+      <div v-if="showChangePwdView" class="fixed inset-0 z-[999] bg-[#0a0a0c] flex flex-col px-6 pt-16 pb-6">
+        <div class="flex items-center mb-10">
+          <button @click="showChangePwdView = false" class="text-white/50 text-sm font-bold py-2 pr-4 btn-press">← 返回主控</button>
+          <h2 class="flex-1 text-center font-bold text-xl text-blue-400 tracking-widest pr-10">安全凭证修改</h2>
+        </div>
+        <div class="glass-outer w-full">
+          <div class="glass-inner p-6 flex flex-col">
+            <div class="input-group mt-2">
+              <input required type="password" v-model="changePwdForm.oldPwd" class="input" style="font-family: monospace;">
+              <label class="user-label">当前原密码</label>
+            </div>
+            <div class="input-group">
+              <input required type="password" v-model="changePwdForm.newPwd" class="input" style="font-family: monospace;">
+              <label class="user-label">新密码</label>
+            </div>
+            <div class="input-group">
+              <input required type="password" v-model="changePwdForm.confirmPwd" class="input" style="font-family: monospace;">
+              <label class="user-label">二次确认新密码</label>
+            </div>
+            <button @click="doChangePwd" class="btn-press w-full bg-blue-600 hover:bg-blue-500 text-white rounded-xl py-3.5 font-bold text-base mt-4 shadow-[0_5px_15px_rgba(10,132,255,0.4)]">
+              确认修改
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <div v-if="isIslandExpanded" class="fixed inset-0 z-[140] bg-transparent pointer-events-auto" @click="isIslandExpanded = false"></div>
+
+    <div class="absolute top-[max(env(safe-area-inset-top),24px)] left-0 w-full h-0 z-[150] pointer-events-none flex justify-between px-[15px]">
+      <div class="dynamic-island safe-top-y glass-outer pointer-events-auto !static" :class="{expanded: isIslandExpanded}" @click="isIslandExpanded = !isIslandExpanded">
+        <div class="glass-inner w-full h-full relative p-3 flex flex-col">
+          <div class="flex justify-between items-center w-full">
+            <span class="font-bold text-white truncate text-sm px-1">{{ userInfo.name }}</span>
+            <span v-show="!isIslandExpanded" class="text-[10px] text-white/50 bg-white/10 px-1.5 rounded">{{ userInfo.role }}</span>
+          </div>
+          <transition name="fade">
+            <div v-show="isIslandExpanded" class="mt-3 border-t border-white/10 pt-3 flex flex-col gap-2">
+              <div class="text-xs text-white/60">学号: <span class="text-white font-mono">{{ userInfo.studentNo }}</span></div>
+              <div class="text-xs text-white/60">组别: <span class="text-white">{{ userInfo.role }}</span></div>
+              <div class="text-xs text-white/60">级别: <span class="text-white">{{ userInfo.level===2?'二级组长':'三级执行员' }}</span></div>
+
+              <button @click.stop="openChangePwdView" class="mt-2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg py-2 text-xs font-bold btn-press">修改凭证密码</button>
+              <button @click.stop="customConfirm('退出确认', '确定要断开连接并退出吗？', true, doLogout)" class="mt-1 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg py-2 text-xs font-bold btn-press">注销退出</button>
+            </div>
+          </transition>
+        </div>
+      </div>
+
+      <div class="capsule-hud safe-top-y glass-outer pointer-events-auto btn-press !static" @click="refreshDataFromCloud(false)">
+        <div class="glass-inner w-full h-full flex items-center justify-center gap-2 px-4 bg-black/40">
+          <span class="text-xs font-bold text-white/90">刷新</span>
+          <span class="status-dot" :class="wsConnected?'text-green-500':'text-red-500 animate-pulse'"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex-1 w-full overflow-hidden relative pt-[100px] pb-[100px]">
+
+      <div v-show="currentTab === 'channel'" class="w-full h-full flex flex-col px-4 pb-2">
+        <div class="glass-outer flex-1 flex flex-col min-h-0">
+          <div class="glass-inner flex-1 flex flex-col overflow-hidden">
+            <div class="flex border-b border-white/10 shrink-0 bg-black/20 rounded-t-[16px] overflow-hidden items-center pr-2">
+              <button v-if="userInfo.level === 2" @click="activeChannel='global'" class="flex-1 py-3 text-xs font-bold transition-colors btn-press" :class="activeChannel==='global'?'text-white bg-white/10':'text-white/40'">🌍 公开</button>
+              <button @click="activeChannel='group'" class="flex-1 py-3 text-xs font-bold transition-colors btn-press" :class="activeChannel==='group'?'text-blue-400 bg-blue-500/10':'text-white/40'"># 本组</button>
+              <button @click="activeChannel='sos'" class="flex-1 py-3 text-xs font-bold transition-colors btn-press" :class="activeChannel==='sos'?'text-red-400 bg-red-500/10':'text-white/40'">🚨 SOS</button>
+
+              <button @click="clearMessages" class="text-xs font-bold text-white/50 hover:text-white/80 ml-auto px-3 py-2 bg-white/5 rounded-lg btn-press">🧹 清屏</button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-3 space-y-3 relative" ref="chatBox">
+              <transition-group name="chat-log">
+                <div v-for="msg in filteredMessages" :key="msg.id" class="flex flex-col max-w-[90%] relative z-10" :class="msg.isSelf ? 'ml-auto items-end' : 'items-start'">
+                  <div class="flex items-baseline gap-1 mb-1 px-1">
+                    <span class="text-[9px] font-bold" :class="msg.isSos ? 'text-red-400' : (msg.isSelf ? 'text-blue-400' : (msg.sender==='导演组'?'text-orange-400':'text-white/50'))">
+                        {{ msg.sender==='导演组' ? '👑 [总控] 导演组' : `${msg.level===2?'⭐':'🛡️'} [${msg.role || '未知'}] ${msg.sender}` }}
+                    </span>
+                    <span class="text-[8px] text-white/30 font-mono">{{ msg.time }}</span>
+                  </div>
+                  <div class="px-3 py-2 rounded-xl text-[13px] leading-relaxed shadow-sm border"
+                       :class="[
+                                       msg.isSos ? 'bg-red-500/20 text-red-100 border-red-500/30' :
+                                       (msg.content || '').includes('[申请授权]') ? 'bg-orange-500/20 text-orange-100 border-orange-500/30 font-bold' :
+                                       msg.isSelf ? 'bg-blue-600 text-white border-blue-500/30 rounded-tr-sm' :
+                                       msg.sender==='导演组' ? 'bg-gradient-to-r from-orange-600/80 to-red-600/80 text-white border-orange-500/30 rounded-tl-sm' :
+                                       'bg-white/5 text-white/90 border-white/10 rounded-tl-sm'
+                                      ]">
+                    {{ msg.content }}
+                  </div>
+                </div>
+              </transition-group>
+            </div>
+            <div class="border-t border-white/10 p-2 bg-black/40 shrink-0 rounded-b-[16px]">
+              <div class="grid grid-cols-2 gap-2 mb-2">
+                <button v-for="(cmd, index) in customCmds" :key="'cmd'+index" @click="handleCmdClick(index)" class="bg-white/5 border border-white/10 rounded-lg py-2 text-[11px] font-bold text-white/80 btn-press truncate">{{ cmd || '未设置' }}</button>
+              </div>
+              <div class="flex gap-2 h-10">
+                <button @click="openAtModal" class="btn-press bg-white/10 border border-white/10 rounded-xl w-10 font-bold text-white/80 flex items-center justify-center">@</button>
+                <input v-model="inputText" @keyup.enter="handleSend" type="text" :placeholder="activeChannel==='sos'?'🚨 编写SOS详细情况...':'发送战术指令...'" class="flex-1 bg-black/50 border border-white/10 rounded-xl px-3 text-sm text-white outline-none">
+                <button @click="handleSend" class="btn-press w-16 rounded-xl font-bold text-sm" :class="activeChannel==='sos'?'bg-red-600 text-white' : 'bg-blue-600 text-white'">发送</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-if="userInfo.level === 2" class="glass-outer mt-3 shrink-0">
+          <div class="glass-inner p-3">
+            <h3 class="font-bold text-[11px] text-orange-400 mb-2 border-b border-white/10 pb-1 flex justify-between">
+              <span>🛡️ 本组三级组员</span><span class="text-white/30">单击私聊/双击管理</span>
+            </h3>
+            <div class="flex gap-2 overflow-x-auto pb-1">
+              <div v-for="member in directSubordinates" :key="'sub'+member.id" @click="handleMemberClick(member)" class="bg-black/40 border border-white/10 rounded-xl p-2 min-w-[70px] shrink-0 btn-press flex flex-col items-center relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-full h-1" :class="member.online?'bg-green-500':'bg-gray-600'"></div>
+                <span class="font-bold text-[10px] text-white/90 truncate w-full text-center mt-1">{{ member.name }}</span>
+              </div>
+              <div v-if="directSubordinates.length === 0" class="text-xs text-white/30 text-center w-full py-2">暂无组员</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-show="currentTab === 'home'" class="w-full h-full flex flex-col px-4 pb-2 overflow-y-auto space-y-4">
+        <template v-if="userInfo.role === '舞台组'">
+          <div class="glass-outer">
+            <div class="glass-inner p-4 relative overflow-hidden">
+              <div class="absolute -right-2 -top-2 text-6xl opacity-5 pointer-events-none">🎤</div>
+              <h3 class="font-bold text-xs text-blue-300 mb-3 uppercase tracking-widest border-b border-white/10 pb-2">现场进度同步</h3>
+              <div class="flex flex-col gap-3">
+
+                <div class="bg-black/40 p-3 rounded-xl border border-white/5">
+                  <div class="text-[10px] text-red-400 font-bold mb-2">正在台上</div>
+                  <div v-if="parsedActiveContestants.length === 0" class="text-sm font-bold text-white mb-2">等待切场</div>
+                  <div v-else class="flex flex-col gap-3">
+                    <div v-for="(singer, idx) in parsedActiveContestants" :key="'active'+idx" class="flex flex-col">
+                      <div class="text-sm font-bold text-white mb-2">{{ singer }}</div>
+                      <div class="flex items-center gap-2 pt-2 border-t border-white/10">
+                        <div @click="openMicSelector('active', null, singer)" class="flex-1 bg-white/5 border border-white/10 rounded-lg p-2 text-xs flex justify-between btn-press">
+                          <span class="truncate font-bold" :class="(activeSingerMics[singer] || getComputedSingerMic(singer)) ? 'text-blue-400' : 'text-white/80'">
+                            {{ activeSingerMics[singer] ? `已选待定: ${activeSingerMics[singer]}` : (getComputedSingerMic(singer) ? `当前在用: ${getComputedSingerMic(singer)}` : '分配麦克风...') }}
+                          </span>
+                        </div>
+                        <button @click="submitMicAssign('active', null, singer)" class="btn-press px-4 py-2 rounded-lg text-xs font-bold transition-colors" :class="activeSingerConfirmStates[singer]?'bg-orange-500 text-white':'bg-blue-600 text-white'">确认派发</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="bg-black/20 p-3 rounded-xl border border-white/5">
+                  <div class="text-[10px] text-yellow-500 font-bold mb-2">即将登场 (候场队列)</div>
+                  <div v-if="parsedNextContestants.length === 0" class="text-sm font-bold text-white/80 mb-2">暂无安排</div>
+                  <div v-else class="flex flex-col gap-3">
+                    <div v-for="(singer, idx) in parsedNextContestants.slice(0, 4)" :key="'next'+idx" class="flex flex-col">
+                      <div class="text-sm font-bold text-white/80 mb-2">{{ singer }}</div>
+                      <div class="flex items-center gap-2 pt-2 border-t border-white/10">
+                        <div @click="openMicSelector('next', null, singer)" class="flex-1 bg-white/5 border border-white/10 rounded-lg p-2 text-xs flex justify-between btn-press">
+                          <span class="truncate font-bold" :class="(nextSingerMics[singer] || getComputedSingerMic(singer)) ? 'text-purple-400' : 'text-white/80'">
+                            {{ nextSingerMics[singer] ? `已选待定: ${nextSingerMics[singer]}` : (getComputedSingerMic(singer) ? `当前备麦: ${getComputedSingerMic(singer)}` : '选择备麦...') }}
+                          </span>
+                        </div>
+                        <button @click="submitMicAssign('next', null, singer)" class="btn-press px-4 py-2 rounded-lg text-xs font-bold transition-colors" :class="nextSingerConfirmStates[singer]?'bg-orange-500 text-white':'bg-white/20 text-white'">备麦就绪</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+          <div class="glass-outer">
+            <div class="glass-inner p-4">
+              <h3 class="font-bold text-xs text-green-400 mb-3 tracking-widest border-b border-white/10 pb-2">🎙️ 主持麦克风常驻配置</h3>
+              <div class="space-y-2">
+                <div v-for="(host, index) in stageHosts" :key="'host'+host.id" class="flex items-center gap-2 bg-black/40 p-2 rounded-xl border border-white/5">
+                  <div class="text-[11px] text-white/90 w-12 text-center">{{ host.name }}</div>
+                  <div @click="openMicSelector('host', index)" class="flex-1 bg-white/5 border border-white/10 rounded-lg p-2 text-xs flex justify-between btn-press">
+                    <span class="font-bold" :class="host.selectedMic ? 'text-green-400' : 'text-white/80'">{{ host.selectedMic ? `已绑定: ${host.selectedMic}` : '配置专麦...' }}</span>
+                  </div>
+                  <button @click="submitMicAssign('host', index)" class="btn-press w-12 py-2 rounded-lg text-[10px] font-bold" :class="host.confirmState?'bg-orange-500 text-white':'bg-white/20 text-white'">绑定</button>
+                </div>
+                <div v-if="stageHosts.length === 0" class="text-xs text-white/30 text-center py-2">暂无主持人数据</div>
+              </div>
+            </div>
+          </div>
+          <div class="glass-outer">
+            <div class="glass-inner p-4 flex justify-between items-center bg-red-950/20">
+              <div class="flex flex-col">
+                <span class="text-sm font-bold text-red-400">🔥 突发设备故障？</span>
+                <span class="text-[10px] text-white/50">向{{ userInfo.level===3?'组长':'总控' }}提交异常</span>
+              </div>
+              <button @click="openBrokenMicModal" class="btn-press bg-red-600/80 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-[0_0_15px_rgba(220,38,38,0.4)]">一键申报</button>
+            </div>
+          </div>
+          <div v-if="userInfo.level === 2 && pendingRequests.length > 0" class="glass-outer">
+            <div class="glass-inner p-4 bg-orange-950/30">
+              <h3 class="font-bold text-[11px] text-orange-400 mb-2">待审批递麦申请</h3>
+              <div v-for="(req, index) in pendingRequests" :key="req.id" class="flex flex-col gap-1 mb-2 bg-black/60 p-2 rounded-lg border border-white/10">
+                <div class="text-[11px] text-white/80">{{ req.sender }} 申请派麦 <b class="text-orange-300">[{{ req.targetMic }}]</b> 给 {{ req.targetName }}</div>
+                <div class="flex gap-2 mt-1">
+                  <button @click="rejectRequest(index)" class="flex-1 bg-white/10 text-white/60 py-1.5 rounded-lg text-[10px] btn-press">驳回</button>
+                  <button @click="approveRequest(index)" class="flex-[2] bg-orange-600 text-white py-1.5 rounded-lg text-[10px] font-bold btn-press">同意上报</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+        <template v-else>
+          <div class="glass-outer">
+            <div class="glass-inner p-4">
+              <h3 class="font-bold text-xs text-blue-300 mb-3 tracking-widest border-b border-white/10 pb-2">📊 全局进度透视</h3>
+
+              <div class="bg-black/40 p-3 rounded-xl border border-white/5 mb-3">
+                <div class="text-[10px] text-red-400 font-bold mb-2">正在台上</div>
+                <div v-if="parsedActiveContestants.length === 0" class="text-lg font-bold text-white mb-2">等待切场</div>
+                <div v-else class="flex flex-col gap-3">
+                  <div v-for="singer in parsedActiveContestants" :key="singer" class="flex flex-col">
+                    <div class="flex justify-between items-end mb-1">
+                      <div class="text-base font-bold text-white truncate pr-2">{{ singer }}</div>
+                      <div class="text-lg font-black text-orange-400 font-mono">{{ stageData.scores?.final || '--.--' }}</div>
+                    </div>
+                    <div class="flex gap-4 text-[10px] text-white/50 border-t border-white/5 pt-2">
+                      <span>专业: <span class="text-white">{{ stageData.scores?.judge || '--' }}</span></span>
+                      <span>大众: <span class="text-white">{{ stageData.scores?.student || '--' }}</span></span>
+                      <span v-if="getComputedSingerMic(singer)" class="ml-auto text-blue-300">麦: {{ getComputedSingerMic(singer) }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="bg-black/20 p-2.5 rounded-xl border border-white/5">
+                <div class="text-xs text-yellow-500 font-bold mb-2">即将登场 (候场队列)</div>
+                <div v-if="parsedNextContestants.length === 0" class="text-[10px] text-white/50">暂无安排</div>
+                <div v-else class="flex flex-col gap-1.5">
+                  <div v-for="singer in parsedNextContestants.slice(0, 4)" :key="singer" class="flex justify-between items-center border-b border-white/5 pb-1.5 last:border-0 last:pb-0">
+                    <span class="text-xs text-white font-bold">{{ singer }}</span>
+                    <span v-if="getComputedSingerMic(singer)" class="text-[9px] text-white/50">备麦: {{ getComputedSingerMic(singer) }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="glass-outer">
+            <div class="glass-inner p-4">
+              <div class="flex justify-between items-center border-b border-white/10 pb-2 mb-3">
+                <h3 class="font-bold text-xs text-green-400 tracking-widest">⚡ 快捷联络</h3>
+                <button @click="openAtModal" class="text-[10px] bg-white/10 px-2 py-1 rounded text-white/80 btn-press">+ 联络人</button>
+              </div>
+              <div class="flex gap-2 overflow-x-auto pb-2">
+                <div v-if="userInfo.level === 2" @click="selectAt('导演组')" class="bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-xs text-white/80 shrink-0 btn-press flex items-center gap-1">📻 总控台</div>
+                <div v-if="userInfo.level === 3 && myGroupLeader" @click="selectAt(myGroupLeader.name)" class="bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-xs text-white/80 shrink-0 btn-press flex items-center gap-1">🛡️ 本组组长</div>
+                <div v-if="userInfo.level === 3 && !myGroupLeader" class="text-[10px] text-white/40 py-2">暂无组长在线</div>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <div v-show="currentTab === 'tasks'" class="w-full h-full flex flex-col pt-4 px-4 pb-[110px] overflow-y-auto relative tasks-wrapper">
+        <div id="t-empty-state" v-show="activeTodos.length === 0">当前暂无任务</div>
+
+        <ul id="active-task-list" class="task-ul">
+          <li v-for="task in activeTodos" :key="task.id" class="t-glass-outer task-list-item">
+            <div class="swipe-actions-bg action-left-side">
+              <div class="action-btn bg-green" @click.stop="changeTodoStatus(task.id, 'completed')">
+                <img :src="ICONS.swipeConfirm" onerror="this.style.display='none'">
+              </div>
+              <div class="action-btn bg-orange" @click.stop="toggleTodoPin(task.id)">
+                <img :src="task.isPinned ? ICONS.unpin : ICONS.pin" onerror="this.style.display='none'">
+              </div>
+            </div>
+            <div class="swipe-actions-bg action-right-side">
+              <div class="action-btn bg-red" @click.stop="deleteTodo(task.id)">
+                <img :src="ICONS.delete" onerror="this.style.display='none'">
+              </div>
+            </div>
+
+            <div class="t-glass-inner task-item swipeable-content">
+              <div class="task-checkbox" :class="{'high-priority': task.priority === 'high'}" @click.stop="toggleTodoStatus(task.id)"></div>
+              <div class="task-content" @click.stop="openEditTodo(task.id)">
+                <div class="task-title flex items-center gap-1">
+                  <span v-if="task.priority === 'high'" class="text-red-500 text-sm animate-pulse">🔥</span>
+                  {{ task.title }}
+                </div>
+                <div class="task-desc" v-if="task.desc">{{ task.desc }}</div>
+              </div>
+            </div>
+          </li>
+        </ul>
+
+        <div id="completed-section" v-show="completedTodos.length > 0">
+          <div class="completed-header" @click="isCompletedCollapsed = !isCompletedCollapsed">
+            <span>已完成</span>
+            <div class="count-wrapper">
+              <span>{{ completedTodos.length }}</span>
+              <span class="toggle-icon" :class="{'collapsed': isCompletedCollapsed}">v</span>
+            </div>
+          </div>
+
+          <ul id="completed-task-list" class="task-ul mt-3" v-show="!isCompletedCollapsed">
+            <li v-for="task in completedTodos" :key="task.id" class="t-glass-outer task-list-item">
+              <div class="swipe-actions-bg action-left-side">
+                <div class="action-btn bg-yellow" @click.stop="changeTodoStatus(task.id, 'active')">
+                  <img :src="ICONS.recover" onerror="this.style.display='none'">
+                </div>
+              </div>
+              <div class="swipe-actions-bg action-right-side">
+                <div class="action-btn bg-red" @click.stop="deleteTodo(task.id)">
+                  <img :src="ICONS.delete" onerror="this.style.display='none'">
+                </div>
+              </div>
+              <div class="t-glass-inner task-item swipeable-content completed">
+                <div class="task-checkbox completed" @click.stop="toggleTodoStatus(task.id)"></div>
+                <div class="task-content" @click.stop="openEditTodo(task.id)">
+                  <div class="task-title">{{ task.title }}</div>
+                  <div class="task-desc" v-if="task.desc">{{ task.desc }}</div>
+                </div>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div v-show="currentTab === 'tasks'">
+        <button id="t-fab" @click="toggleInputArea(true)"><img :src="ICONS.add" onerror="this.style.display='none'"></button>
+        <div id="t-overlay" :class="{'active': showTaskOverlay}" @click="closeAllTaskPanels"></div>
+
+        <div id="t-input-area" class="t-glass-outer t-bottom-sheet" :class="{'active': isInputAreaVisible}">
+          <div class="t-glass-inner input-layout">
+            <div class="icon-btn" @click.stop="openPriorityPopover('add')">
+              <img :src="ICONS[currentPriority]" onerror="this.style.display='none'">
+            </div>
+            <div class="input-fields">
+              <input type="text" v-model="newTodo.title" placeholder="此处为主标题" autocomplete="off" id="title-input">
+              <input type="text" v-model="newTodo.desc" placeholder="此处为描述" autocomplete="off">
+            </div>
+            <div class="icon-btn submit-btn" @click="submitNewTodo">
+              <img :src="ICONS.confirm" onerror="this.style.display='none'">
+            </div>
+          </div>
+        </div>
+
+        <div id="t-edit-area" class="t-glass-outer t-bottom-sheet" :class="{'active': isEditAreaVisible}">
+          <div class="t-glass-inner">
+            <div class="edit-header">
+              <div class="task-checkbox" :class="{'completed': editTodo.status==='completed', 'high-priority': editTodo.priority==='high' && editTodo.status!=='completed'}" @click="toggleEditTodoStatus"></div>
+              <div class="edit-flag-btn" @click.stop="openPriorityPopover('edit')">
+                <img :src="ICONS[editTodo.priority]" onerror="this.style.display='none'">
+              </div>
+            </div>
+            <div class="edit-body">
+              <input type="text" v-model="editTodo.title" placeholder="任务主标题" autocomplete="off" id="edit-title">
+              <textarea v-model="editTodo.desc" placeholder="任务详细描述..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div id="t-priority-popover" class="t-glass-outer" :class="{'active': isPriorityPopoverVisible}">
+          <div class="t-glass-inner" style="padding: 4px 12px;">
+            <div class="priority-option" @click.stop="setPriority('high')">
+              <img :src="ICONS.high" onerror="this.style.display='none'"> 高优先级
+            </div>
+            <div class="priority-option" @click.stop="setPriority('none')">
+              <img :src="ICONS.none" onerror="this.style.display='none'"> 无优先级
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="nav-container">
+      <div class="glass-radio-group">
+        <input type="radio" name="tab" id="tab-channel" value="channel" v-model="currentTab">
+        <label for="tab-channel">频道</label>
+        <input type="radio" name="tab" id="tab-home" value="home" v-model="currentTab">
+        <label for="tab-home">主页</label>
+        <input type="radio" name="tab" id="tab-tasks" value="tasks" v-model="currentTab">
+        <label for="tab-tasks">事项</label>
+        <div class="glass-glider"></div>
+      </div>
+    </div>
+
+    <transition name="fade">
+      <div v-if="newTaskModal.show && newTaskModal.task" class="fixed inset-0 z-[850] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center" @click.stop>
+        <div class="glass-outer w-full max-w-sm">
+          <div class="glass-inner p-6 flex flex-col items-center border transition-colors duration-300" :class="newTaskModal.task.priority === 'high' ? 'border-red-500/50 shadow-[0_0_30px_rgba(239,68,68,0.3)]' : 'border-blue-500/50 shadow-[0_0_30px_rgba(10,132,255,0.3)]'">
+            <div class="text-6xl mb-4" :class="newTaskModal.task.priority === 'high' ? 'drop-shadow-[0_0_30px_rgba(239,68,68,0.7)] animate-pulse' : 'drop-shadow-[0_0_30px_rgba(10,132,255,0.7)]'">
+              {{ newTaskModal.task.priority === 'high' ? '🔥' : '📌' }}
+            </div>
+            <h2 class="text-2xl font-black mb-6 tracking-wider" :class="newTaskModal.task.priority === 'high' ? 'text-red-500' : 'text-blue-400'">
+              {{ newTaskModal.task.priority === 'high' ? '高优战术指令' : '新战术指令' }}
+            </h2>
+            <div class="w-full bg-black/40 border border-white/10 rounded-xl p-4 mb-6 text-left">
+              <div class="text-xs font-bold mb-2 text-white/50">指派目标: <span class="text-white">{{ newTaskModal.task.target === 'all' ? '全体终端' : newTaskModal.task.target }}</span></div>
+              <div class="text-lg text-white font-bold mb-2">{{ newTaskModal.task.title }}</div>
+              <div class="text-sm text-white/80 leading-relaxed">{{ newTaskModal.task.desc }}</div>
+            </div>
+            <button @click="ackNewTask" class="w-full text-white rounded-xl py-3 font-black text-lg btn-press transition-colors" :class="newTaskModal.task.priority === 'high' ? 'bg-red-600 hover:bg-red-500' : 'bg-blue-600 hover:bg-blue-500'">
+              立刻执行 (ACK)
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <transition name="modal">
+      <div v-if="brokenMicModal.show" class="fixed inset-0 z-[700] flex items-center justify-center bg-black/80 backdrop-blur-md px-4">
+        <div class="glass-outer w-full max-w-sm">
+          <div class="glass-inner p-6 bg-red-950/20 border border-red-500/30">
+            <h3 class="text-red-400 text-lg font-bold mb-4 flex items-center gap-2">🚨 麦克风故障申报</h3>
+            <p class="text-xs text-white/50 mb-4 leading-relaxed">点击选择发生故障的麦克风，将立刻上报并锁定频段：</p>
+            <div class="grid grid-cols-4 gap-2 max-h-[40vh] overflow-y-auto mb-5 p-1">
+              <button v-for="m in mics" :key="'brk'+m.id" @click="reportBrokenMic(m.id)" class="p-3 rounded-xl border btn-press flex flex-col items-center justify-center relative overflow-hidden"
+                      :class="m.isBroken ? 'bg-red-900/50 border-red-500/50 text-red-400 cursor-not-allowed' : 'bg-white/5 border-white/10 text-white/80 hover:bg-white/10'">
+                <span class="text-xl mb-1">{{ m.type==='hand'?'🎤':'🎧' }}</span>
+                <span class="text-[11px] font-bold">{{ m.id }}</span>
+                <div v-if="m.isBroken" class="absolute top-0 right-0 bg-red-600 text-[8px] text-white px-1.5 py-0.5 rounded-bl-lg">已坏</div>
+              </button>
+            </div>
+            <button @click="brokenMicModal.show = false" class="w-full bg-white/10 hover:bg-white/20 transition-colors text-white rounded-xl py-3 text-sm font-bold btn-press">关闭面板</button>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <transition name="fade">
+      <div v-if="micSelector.show" class="fixed inset-0 z-[600] flex flex-col justify-end">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="micSelector.show=false"></div>
+        <div class="glass-outer w-full rounded-b-none border-b-0 relative z-10">
+          <div class="glass-inner rounded-b-none p-6 pb-12">
+            <div class="flex justify-between items-center mb-6">
+              <h3 class="text-lg font-bold text-white">请选择麦克风</h3>
+              <button @click="micSelector.show=false" class="text-white/40 font-bold p-2 btn-press">✕</button>
+            </div>
+            <div class="grid grid-cols-4 gap-3 max-h-[50vh] overflow-y-auto">
+              <button v-for="m in mics" :key="'select'+m.id" @click="chooseMic(m)"
+                      class="p-3 rounded-xl flex flex-col items-center gap-1 transition-colors relative overflow-hidden"
+                      :class="(!m.active || m.isBroken) ? 'bg-black/80 border border-red-500/20 opacity-50 grayscale' : 'bg-white/5 border border-white/10 btn-press'">
+                <div v-if="!m.active" class="absolute top-0 right-0 bg-gray-600 text-[8px] px-1 rounded-bl-lg">锁定</div>
+                <div v-if="m.isBroken" class="absolute top-0 left-0 bg-red-600 text-[8px] px-1 rounded-br-lg">故障</div>
+                <span class="text-lg">{{ m.type==='hand'?'🎤':'🎧' }}</span>
+                <span class="text-xs font-bold text-white/80">{{ m.id }}</span>
+              </button>
+            </div>
+            <div v-if="mics.length === 0" class="text-center py-6 text-white/30 text-sm">暂未同步到数据</div>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <transition name="fade">
+      <div v-if="sosFullModal.show" class="fixed inset-0 z-[800] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center" @click.stop>
+        <div class="glass-outer w-full max-w-sm">
+          <div class="glass-inner p-6 flex flex-col items-center border border-red-500/50 shadow-[0_0_30px_rgba(239,68,68,0.3)]">
+            <div class="text-6xl mb-4 drop-shadow-[0_0_30px_rgba(239,68,68,0.7)]">🚨</div>
+            <h2 class="text-3xl font-black text-red-500 mb-6 tracking-wider animate-pulse">SOS 强提醒</h2>
+            <div class="w-full bg-red-950/40 border border-red-500/30 rounded-xl p-4 mb-6 text-left">
+              <div class="text-red-400 text-xs font-bold mb-2">发送人: <span class="text-white">{{ sosFullModal.sender }}</span></div>
+              <div class="text-base text-white font-bold leading-relaxed mb-3">紧急情况: <br><span class="text-xl text-red-300 mt-1 block">{{ sosFullModal.content }}</span></div>
+            </div>
+            <button @click="ackSosAlert" class="w-full bg-white text-black rounded-xl py-3 font-black text-lg btn-press">✓ 收到 (ACK)</button>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <transition name="fade">
+      <div v-if="sysModal.show" class="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4" @click.stop>
+        <div class="glass-outer w-full max-w-sm"><div class="glass-inner p-6">
+          <h3 class="text-lg font-bold mb-3" :class="sysModal.isDanger ? 'text-red-500' : 'text-blue-500'">{{ sysModal.title }}</h3>
+          <p class="text-white/80 text-sm mb-6 leading-relaxed whitespace-pre-line" v-html="sysModal.content"></p>
+          <div class="flex gap-3 justify-end">
+            <button v-if="sysModal.type==='confirm'" @click="sysModal.show=false" class="px-4 py-2 rounded-lg bg-white/10 text-sm font-bold btn-press text-white">取消</button>
+            <button @click="sysModal.onConfirm" class="px-4 py-2 rounded-lg text-white text-sm font-bold btn-press" :class="sysModal.isDanger ? 'bg-red-600' : 'bg-blue-600'">确定</button>
+          </div>
+        </div></div>
+      </div>
+    </transition>
+
+    <transition name="fade">
+      <div v-if="isLocked" class="fixed inset-0 z-[900] bg-black/95 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center" @click.stop>
+        <img src="assets/XSlogo.webp" class="w-24 mb-6 opacity-80" onerror="this.style.display='none'">
+        <h2 class="text-2xl font-bold text-orange-400 mb-2 tracking-widest">终端已被接管</h2>
+        <p class="text-white/60 text-sm leading-relaxed">导播总台已锁定您的操作权限<br>请保持屏幕常亮并原地待命</p>
+      </div>
+    </transition>
+
+    <transition name="modal">
+      <div v-if="memberDetailModal.show" class="fixed inset-0 z-[750] flex items-center justify-center bg-black/80 backdrop-blur-md px-4" @click="memberDetailModal.show=false">
+        <div class="glass-outer w-full max-w-md" @click.stop>
+          <div class="glass-inner flex flex-col overflow-hidden">
+            <div class="p-5 border-b border-white/5 flex justify-between items-start bg-black/20">
+              <div>
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full" :class="memberDetailModal.member.online?'bg-green-500':'bg-red-500'"></span>
+                  {{ memberDetailModal.member.name }}
+                </h3>
+                <p class="text-xs text-white/50 mt-1">学号: {{ memberDetailModal.member.studentNo || '未知' }} | 身份: {{ memberDetailModal.member.role }}</p>
+              </div>
+              <div class="flex flex-col gap-2 shrink-0">
+                <button @click="remoteControl(memberDetailModal.member.name, 'lock')" class="bg-orange-500/20 text-orange-400 border border-orange-500/30 px-3 py-1.5 rounded text-xs font-bold btn-press">🔒 锁定</button>
+                <button @click="remoteControl(memberDetailModal.member.name, 'unlock')" class="bg-green-500/20 text-green-400 border border-green-500/30 px-3 py-1.5 rounded text-xs font-bold btn-press">🔓 解锁</button>
+                <button @click="remoteControl(memberDetailModal.member.name, 'kick')" class="bg-red-500/20 text-red-400 border border-red-500/30 px-3 py-1.5 rounded text-xs font-bold btn-press">🛑 踢出</button>
+              </div>
+            </div>
+            <div class="p-4 bg-[#141416] h-64 overflow-y-auto">
+              <h4 class="text-[10px] text-white/40 mb-3 tracking-widest uppercase">实时活动日志 (前20条)</h4>
+              <div class="space-y-2">
+                <div v-for="log in getMemberLogs(memberDetailModal.member.name)" :key="log.id" class="text-xs flex gap-2 border-b border-white/5 pb-2 last:border-0">
+                  <span class="text-white/30 font-mono shrink-0">[{{ log.time }}]</span>
+                  <span class="text-white/80 leading-relaxed">{{ log.action }}</span>
+                </div>
+                <div v-if="getMemberLogs(memberDetailModal.member.name).length === 0" class="text-xs text-white/30 text-center py-6 border border-dashed border-white/10 rounded-lg">暂无活动记录</div>
+              </div>
+            </div>
+            <div class="p-3 bg-black/40 border-t border-white/5">
+              <button @click="memberDetailModal.show=false" class="w-full bg-white/10 text-white rounded-lg py-2.5 text-sm font-bold btn-press">关闭面板</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <transition name="modal">
+      <div v-if="atModal.show" class="fixed inset-0 z-[700] flex items-end justify-center bg-black/70 backdrop-blur-sm" @click="atModal.show=false">
+        <div class="glass-outer w-full rounded-b-none border-b-0 relative z-10 max-h-[60vh] flex flex-col" @click.stop>
+          <div class="glass-inner rounded-b-none p-5 flex flex-col flex-1 overflow-hidden">
+            <div class="flex justify-between items-center mb-4 shrink-0">
+              <h3 class="text-white font-bold">选择定向呼叫对象</h3>
+              <button @click="atModal.show=false" class="text-white/40 text-xl font-bold btn-press">✕</button>
+            </div>
+            <div class="overflow-y-auto space-y-2 flex-1 pb-4">
+              <button v-for="u in computedAtList" :key="'at'+u.id" @click="selectAt(u.name)" class="w-full text-left p-3 bg-white/5 border border-white/5 rounded-xl text-white text-sm btn-press flex justify-between items-center">
+                <span>{{ u.name }} <span class="text-white/40 text-xs ml-1">({{ u.role }})</span></span>
+                <span v-if="u.level===1" class="text-[10px] text-orange-400 bg-orange-500/20 px-1.5 py-0.5 rounded">总控</span>
+                <span v-else-if="u.level===2" class="text-[10px] text-blue-400 bg-blue-500/20 px-1.5 py-0.5 rounded">组长</span>
+              </button>
+              <div v-if="computedAtList.length === 0" class="text-center text-white/30 text-xs py-4">当前频道暂无可呼叫对象</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <transition name="fade">
+      <div v-if="actionModal.show" class="absolute inset-0 z-[100] bg-black/80 flex items-end justify-center" @click="actionModal.show=false">
+        <div class="glass-outer w-full rounded-b-none border-b-0" @click.stop>
+          <div class="glass-inner rounded-b-none p-6 pb-12">
+            <div class="flex justify-between items-start mb-6">
+              <div>
+                <h3 class="text-lg font-bold flex items-center gap-2"><div class="w-2.5 h-2.5 rounded-full" :class="actionModal.target.online?'bg-green-500':'bg-gray-500'"></div>通联: {{ actionModal.target.name }}</h3>
+                <p class="text-xs text-white/40 mt-1">输入下发专线指令或短讯</p>
+              </div>
+              <button @click="actionModal.show=false" class="text-white/40 text-xl font-bold p-2">✕</button>
+            </div>
+            <div class="flex gap-2">
+              <input v-model="actionModal.text" :maxlength="userInfo.level===3 ? 30 : 100" placeholder="撰写定向短讯..." class="flex-1 bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-blue-500">
+              <button @click="sendDirectAction(actionModal.text)" class="w-20 bg-blue-600 text-white rounded-xl font-bold text-sm btn-press">发送</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <transition name="fade"><div v-if="toastMsg" class="toast show">{{ toastMsg }}</div></transition>
+
+  </div>
+</div>
+
+<script>
+  const { createApp, ref, reactive, computed, onMounted, nextTick, watch } = Vue;
+
+  const MobileSelect = {
+    props: {
+      modelValue: { type: [String, Number], default: '' },
+      options: { type: Array, required: true },
+      label: { type: String, default: '请选择' }
+    },
+    emits: ['update:modelValue'],
+    template: `
+      <div class="input-group text-left" @click.stop="toggle">
+        <div class="input flex items-center relative cursor-pointer"
+             :class="{'!border-[#0A84FF]': open || modelValue}"
+             style="min-height: 2.8rem; box-sizing: border-box; padding-top:0; padding-bottom:0;">
+
+          <div class="flex-1 text-center overflow-hidden px-8">
+              <span class="block truncate transition-colors text-[0.95rem]"
+                    :class="modelValue ? 'text-[#f5f5f5]' : 'text-transparent'">
+                {{ selectedLabel || ' ' }}
+              </span>
+          </div>
+
+          <span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs transition-transform duration-200"
+                :class="open ? 'rotate-180 text-[#0A84FF]' : 'text-white/50'">▼</span>
+        </div>
+
+        <label class="user-label transition-all" :class="{'floating': open || modelValue}">{{ label }}</label>
+
+        <transition name="fade">
+          <div v-if="open" class="absolute left-0 right-0 mt-2 bg-[#1c1c1e] border border-white/10 rounded-xl shadow-2xl z-[9999] max-h-[220px] overflow-y-auto" @click.stop>
+            <div v-for="opt in options" :key="opt.value" @click.stop="select(opt)"
+                 class="px-4 py-3.5 text-sm cursor-pointer border-b border-white/5 last:border-0 transition-colors"
+                 :class="opt.value === modelValue ? 'text-[#0A84FF] bg-blue-500/10 font-bold' : 'text-white/80 hover:bg-white/10'">
+              {{ opt.label }}
+            </div>
+            <div v-if="options.length === 0" class="px-4 py-4 text-xs text-white/30 text-center">暂无选项</div>
+          </div>
+        </transition>
+      </div>
+    `,
+    data() { return { open: false } },
+    computed: {
+      selectedLabel() {
+        const s = this.options.find(o => String(o.value) === String(this.modelValue));
+        return s ? s.label : '';
+      }
+    },
+    methods: {
+      toggle() { this.open = !this.open; },
+      select(opt) {
+        this.$emit('update:modelValue', opt.value);
+        this.open = false;
+      },
+      closeListener() { this.open = false; }
+    },
+    mounted() { document.addEventListener('click', this.closeListener); },
+    beforeUnmount() { document.removeEventListener('click', this.closeListener); }
+  };
+
+  const app = createApp({
+    setup() {
+      // 🚀 核心修复：提前声明缺失的关键变量
+      let heartbeatTimer = null;
+
+      const isLogged = ref(false);
+      const isLoggingIn = ref(false);
+      const isRequesting = ref(false);
+      const wsConnected = ref(false); const isLocked = ref(false); const isSosFlashing = ref(false);
+      const currentTab = ref('home');
+      const activeChannel = ref('group');
+      const chatBox = ref(null); const myUniqueDeviceId = ref('');
+
+      const authView = ref('login');
+
+      const loginForm = ref({ name: '', studentNo: '', pwd: '' });
+      const regForm = ref({ name: '', studentNo: '', pwd: '' });
+      const forgotForm = ref({ name: '', studentNo: '' });
+      const resetForm = ref({ pwd: '', confirmPwd: '' });
+
+      const showChangePwdView = ref(false);
+      const changePwdForm = ref({ oldPwd: '', newPwd: '', confirmPwd: '' });
+
+      const publicGroups = ref(['导演组', '舞台组']);
+      const publicGroupsOptions = computed(() => publicGroups.value.map(g => ({ label: g, value: g })));
+
+      const isIslandExpanded = ref(false);
+      const globalActionLogs = ref([]);
+      const addLog = (name, action) => {
+        const time = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit' });
+        globalActionLogs.value.unshift({ id: Date.now()+Math.random(), name, time, action });
+        if (globalActionLogs.value.length > 500) globalActionLogs.value.pop();
+      };
+      const getMemberLogs = (name) => { return globalActionLogs.value.filter(l => l.name === name).slice(0, 20); };
+
+      const toastMsg = ref(''); const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => toastMsg.value = '', 2000); };
+      const sysModal = ref({ show: false, type: 'alert', title: '', content: '', isDanger: false, onConfirm: null });
+      const customAlert = (content, title='提示') => { sysModal.value = { show: true, type: 'alert', title, content, isDanger: false, onConfirm: () => { sysModal.value.show = false; } }; };
+      const customConfirm = (title, content, isDanger, onConfirmCallback) => { sysModal.value = { show: true, type: 'confirm', title, content, isDanger, onConfirm: () => { onConfirmCallback(); sysModal.value.show = false; } }; };
+
+      const userInfo = ref({ name: '', studentNo: '', role: '', level: 3 });
+      const allCloudStaff = ref([]);
+
+      // 🚀 核心修复：定义 markUserOnline 以防 ws.onmessage 报错崩溃
+      const markUserOnline = (senderName) => {
+        const u = allCloudStaff.value.find(x => x && x.name === senderName);
+        if (u) {
+          u.online = true;
+          u.lastSeen = Date.now();
+        }
+      };
+
+      const savedStageData = JSON.parse(localStorage.getItem('mobile_stage_data_v3') || '{"active": "未就绪", "next": "暂无安排", "scores": {"final": "--", "judge": "--", "student": "--"}}');
+      const stageData = ref(savedStageData);
+      watch(stageData, (newVal) => localStorage.setItem('mobile_stage_data_v3', JSON.stringify(newVal)), { deep: true });
+
+      const stageHosts = ref([]); const mics = ref([]);
+      const messages = ref([]); const inputText = ref('');
+
+      const sosFullModal = ref({ show: false, sender: '', content: '' });
+
+      const newTaskModal = ref({ show: false, task: null });
+      const ackNewTask = () => {
+        newTaskModal.value.show = false;
+        currentTab.value = 'tasks';
+      };
+
+      const ackedSosList = ref(JSON.parse(localStorage.getItem('mobile_acked_sos') || '[]'));
+      const pendingRequests = ref([]);
+      const kickedByOtherModal = ref(false);
+
+      const currentProtocol = window.location.protocol; const currentHostname = window.location.hostname;
+      const isDesktopApp = currentProtocol === 'file:' || currentProtocol.includes('tauri') || currentHostname.includes('tauri') || currentHostname === 'localhost' || currentHostname === '127.0.0.1';
+      const host = isDesktopApp ? "https://xuanfu.asia" : currentProtocol + '//' + window.location.host;
+      const wsUrl = isDesktopApp ? "wss://xuanfu.asia/ws/screen" : (currentProtocol === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/ws/screen';
+
+      const fetchWithAuth = async (url, options = {}) => {
+        const token = localStorage.getItem('mobile_token');
+        if (!options.headers) options.headers = {};
+        if (token) options.headers['Authorization'] = `Bearer ${token}`;
+        const finalUrl = url.startsWith('/') ? host + url : url;
+        const res = await fetch(finalUrl, options);
+        if (res.status === 401) { doLogout(); throw new Error("Unauthorized"); }
+        return res;
+      };
+
+      const vibrateDevice = (pattern) => { if (navigator.vibrate) try { navigator.vibrate(pattern); } catch(e){} };
+
+      let pollTimer = null;
+
+      const doLogin = async () => {
+        if (!loginForm.value.name.trim() || !loginForm.value.studentNo.trim() || !loginForm.value.pwd.trim()) return customAlert("请完整填写身份验证信息！", "💡 提示");
+        isLoggingIn.value = true;
+        try {
+          const formData = new URLSearchParams();
+          formData.append('role', 'staff');
+          formData.append('pwd', loginForm.value.pwd.trim());
+          formData.append('name', loginForm.value.name.trim());
+          formData.append('studentNo', loginForm.value.studentNo.trim());
+
+          const authRes = await fetch(host + '/api/scores/auth', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: formData.toString() });
+          if (!authRes.ok) {
+            const errTxt = await authRes.text();
+            throw new Error(errTxt || "获取令牌失败");
+          }
+          const authData = await authRes.json();
+          if (authData.token) localStorage.setItem('mobile_token', authData.token);
+
+          const res = await fetchWithAuth('/api/staff');
+          if(res.ok) {
+            const staffList = await res.json();
+            const matchedUser = staffList.find(u => u.name === loginForm.value.name.trim() && String(u.studentNo) === String(loginForm.value.studentNo.trim()));
+            if (matchedUser) {
+              myUniqueDeviceId.value = 'd_' + Date.now();
+              userInfo.value = { id: matchedUser.id, name: matchedUser.name, studentNo: matchedUser.studentNo, role: matchedUser.role, level: matchedUser.level };
+              localStorage.setItem('mobile_tactics_user', JSON.stringify(userInfo.value)); localStorage.setItem('my_device_unique_id', myUniqueDeviceId.value);
+              isLogged.value = true; fetchTacticsData(); connectWs(); vibrateDevice(50);
+            } else { customAlert(`核验失败：云端查无此人或仍处于待审批状态。`, "🚫 核验拦截"); }
+          }
+        } catch(e) { customAlert("登录拦截：" + e.message, "❌ 安全拦截"); }
+        finally { isLoggingIn.value = false; }
+      };
+
+      const doRegister = async () => {
+        if(!regForm.value.name || !regForm.value.studentNo || !regForm.value.pwd) {
+          return customAlert("请完整填写注册表单的内容！");
+        }
+        isRequesting.value = true;
+        try {
+          const payload = {
+            name: regForm.value.name.trim(),
+            studentNo: regForm.value.studentNo.trim(),
+            password: regForm.value.pwd.trim(),
+            role: '待分配',
+            level: 3
+          };
+
+          const res = await fetch(host + '/api/staff/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          if (res.ok) {
+            authView.value = 'wait_approve';
+            showToast("申请已成功提交至总台");
+
+            if(pollTimer) clearInterval(pollTimer);
+            pollTimer = setInterval(async () => {
+              try {
+                const formData = new URLSearchParams();
+                formData.append('role', 'staff');
+                formData.append('pwd', regForm.value.pwd.trim());
+                formData.append('name', regForm.value.name.trim());
+                formData.append('studentNo', regForm.value.studentNo.trim());
+
+                const authRes = await fetch(host + '/api/scores/auth', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: formData.toString() });
+
+                if (authRes.ok) {
+                  const authData = await authRes.json();
+                  if (authData.token) {
+                    clearInterval(pollTimer);
+                    if (authView.value === 'wait_approve') {
+                      showToast("总台审批已通过！");
+                      loginForm.value.name = regForm.value.name;
+                      loginForm.value.studentNo = regForm.value.studentNo;
+                      loginForm.value.pwd = '';
+                      authView.value = 'login';
+                    }
+                  }
+                }
+              } catch(e) {}
+            }, 3000);
+          } else {
+            const err = await res.text();
+            customAlert(err || "注册失败，请稍后重试。");
+          }
+        } catch(e) {
+          customAlert("网络异常，注册申请提交失败。");
+        } finally {
+          isRequesting.value = false;
+        }
+      };
+
+      const doForgotRequest = async () => {
+        if(!forgotForm.value.name || !forgotForm.value.studentNo) return customAlert("请填写您的姓名与学号！");
+        isRequesting.value = true;
+        try {
+          await new Promise(resolve => setTimeout(resolve, 800));
+          authView.value = 'wait_reset';
+          showToast("重置请求已发送至总台");
+
+          if(pollTimer) clearInterval(pollTimer);
+          let counter = 0;
+          pollTimer = setInterval(() => {
+            counter++;
+            if(counter > 2) {
+              clearInterval(pollTimer);
+              if (authView.value === 'wait_reset') {
+                showToast("后台已同意重置请求");
+                authView.value = 'reset_pwd';
+              }
+            }
+          }, 3000);
+        } catch(e) {} finally { isRequesting.value = false; }
+      };
+
+      const doResetConfirm = async () => {
+        if(!resetForm.value.pwd || resetForm.value.pwd !== resetForm.value.confirmPwd) {
+          return customAlert("两次输入的密码不一致或为空！");
+        }
+        showToast("密码重置成功，请重新登录");
+        loginForm.value.name = forgotForm.value.name;
+        loginForm.value.studentNo = forgotForm.value.studentNo;
+        loginForm.value.pwd = resetForm.value.pwd;
+
+        forgotForm.value = { name: '', studentNo: '' };
+        resetForm.value = { pwd: '', confirmPwd: '' };
+        authView.value = 'login';
+      };
+
+      const openChangePwdView = () => {
+        changePwdForm.value = { oldPwd: '', newPwd: '', confirmPwd: '' };
+        showChangePwdView.value = true;
+      };
+
+      const doChangePwd = async () => {
+        if(!changePwdForm.value.oldPwd || !changePwdForm.value.newPwd || changePwdForm.value.newPwd !== changePwdForm.value.confirmPwd) {
+          return customAlert("原密码错误或两次新密码输入不一致！");
+        }
+        showToast("修改成功，新凭证已生效！");
+        showChangePwdView.value = false;
+      };
+
+      const doLogout = () => { localStorage.removeItem('mobile_tactics_user'); localStorage.removeItem('mobile_token'); window.location.reload(); };
+
+      const clearMessages = () => {
+        customConfirm("清空频道记录", "确定要清除当前屏幕上所有的频道聊天信息吗？此操作仅清理本地显示。", false, () => {
+          messages.value = [];
+          showToast("屏幕清理完毕");
+        });
+      };
+
+      const basePath = "assets/";
+      const ICONS = {
+        none: basePath + "WYXJ.svg",
+        high: basePath + "GYXJ.svg",
+        confirm: basePath + "QR.svg",
+        add: basePath + "TJ.svg",
+        swipeConfirm: basePath + "QueRen.svg",
+        pin: basePath + "ZD.svg",
+        unpin: basePath + "QXZD.svg",
+        recover: basePath + "HF.svg",
+        delete: basePath + "SC.svg"
+      };
+
+      const todos = ref(JSON.parse(localStorage.getItem('mobile_todos_v3') || '[]'));
+      const currentPriority = ref('none');
+      const priorityContext = ref('add');
+      const editingTodoId = ref(null);
+      const isCompletedCollapsed = ref(false);
+
+      const showTaskOverlay = ref(false);
+      const isInputAreaVisible = ref(false);
+      const isEditAreaVisible = ref(false);
+      const isPriorityPopoverVisible = ref(false);
+
+      const newTodo = reactive({ title: '', desc: '' });
+      const editTodo = reactive({ title: '', desc: '', priority: 'none', status: 'active' });
+
+      const activeTodos = computed(() => {
+        return todos.value.filter(t => t.status === 'active').sort((a, b) => {
+          if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+          if (a.priority !== b.priority) return a.priority === 'high' ? -1 : 1;
+          return b.id - a.id;
+        });
+      });
+
+      const completedTodos = computed(() => {
+        return todos.value.filter(t => t.status === 'completed').sort((a, b) => {
+          if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+          if (a.priority !== b.priority) return a.priority === 'high' ? -1 : 1;
+          return b.id - a.id;
+        });
+      });
+
+      // 🚀 核心修复：任务状态改变时，立刻向总台推送 WebSocket
+      const notifyTaskComplete = (t) => {
+        if (wsConnected.value && ws && t.status === 'completed') {
+          ws.send(JSON.stringify({ type: 'TASK_COMPLETED', taskId: t.id, sender: userInfo.value.name }));
+        }
+      };
+
+      const changeTodoStatus = (id, newStatus) => {
+        const t = todos.value.find(x => x.id === id);
+        if (t) {
+          t.status = newStatus;
+          notifyTaskComplete(t);
+        }
+      };
+
+      const toggleTodoStatus = (id) => {
+        const t = todos.value.find(x => x.id === id);
+        if (t) {
+          t.status = t.status === 'active' ? 'completed' : 'active';
+          notifyTaskComplete(t);
+        }
+      };
+
+      const toggleTodoPin = (id) => {
+        const t = todos.value.find(x => x.id === id);
+        if (t) t.isPinned = !t.isPinned;
+      };
+
+      const deleteTodo = (id) => {
+        todos.value = todos.value.filter(x => x.id !== id);
+      };
+
+      const toggleInputArea = (show) => {
+        if (show) {
+          showTaskOverlay.value = true;
+          isInputAreaVisible.value = true;
+          nextTick(() => document.getElementById('title-input')?.focus());
+        } else {
+          isInputAreaVisible.value = false;
+          newTodo.title = '';
+          newTodo.desc = '';
+          currentPriority.value = 'none';
+        }
+      };
+
+      const openEditTodo = (id) => {
+        const t = todos.value.find(x => x.id === id);
+        if (!t) return;
+        editingTodoId.value = id;
+        editTodo.title = t.title;
+        editTodo.desc = t.desc;
+        editTodo.priority = t.priority;
+        editTodo.status = t.status;
+
+        showTaskOverlay.value = true;
+        isEditAreaVisible.value = true;
+      };
+
+      const closeAllTaskPanels = () => {
+        showTaskOverlay.value = false;
+        isPriorityPopoverVisible.value = false;
+        toggleInputArea(false);
+
+        if (editingTodoId.value) {
+          editingTodoId.value = null;
+          isEditAreaVisible.value = false;
+        }
+      };
+
+      const openPriorityPopover = (context) => {
+        priorityContext.value = context;
+        isPriorityPopoverVisible.value = !isPriorityPopoverVisible.value;
+      };
+
+      const setPriority = (level) => {
+        if (priorityContext.value === 'add') {
+          currentPriority.value = level;
+        } else if (priorityContext.value === 'edit' && editingTodoId.value) {
+          const t = todos.value.find(x => x.id === editingTodoId.value);
+          if (t) {
+            t.priority = level;
+            editTodo.priority = level;
+          }
+        }
+        isPriorityPopoverVisible.value = false;
+      };
+
+      const toggleEditTodoStatus = () => {
+        if (editingTodoId.value) {
+          const t = todos.value.find(x => x.id === editingTodoId.value);
+          if (t) {
+            t.status = t.status === 'active' ? 'completed' : 'active';
+            editTodo.status = t.status;
+            notifyTaskComplete(t);
+          }
+        }
+      };
+
+      const submitNewTodo = () => {
+        const title = newTodo.title.trim();
+        if (title) {
+          todos.value.push({
+            id: Date.now(),
+            title,
+            desc: newTodo.desc.trim(),
+            priority: currentPriority.value,
+            status: 'active',
+            isPinned: false
+          });
+          closeAllTaskPanels();
+        }
+      };
+
+      watch(editTodo, () => {
+        if (editingTodoId.value) {
+          const t = todos.value.find(x => x.id === editingTodoId.value);
+          if (t) {
+            t.title = editTodo.title;
+            t.desc = editTodo.desc;
+          }
+        }
+      }, { deep: true });
+
+      const attachSwipeListeners = () => {
+        document.querySelectorAll('.swipeable-content').forEach(el => {
+          if (el.dataset.swipeAttached === 'true') return;
+          el.dataset.swipeAttached = 'true';
+
+          let startX = 0; let currentX = 0; let isSwiping = false; let swipeStarted = false;
+
+          const li = el.closest('li');
+          if(!li) return;
+          const actionBgs = li.querySelectorAll('.swipe-actions-bg');
+          const leftBg = li.querySelector('.action-left-side');
+          const rightBg = li.querySelector('.action-right-side');
+
+          const handleStart = (e) => {
+            if (e.target.closest('.task-checkbox') || e.target.closest('.task-content')) return;
+
+            startX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+            isSwiping = true;
+            swipeStarted = false;
+
+            el.style.transition = 'none';
+            if (leftBg) leftBg.style.transition = 'none';
+            if (rightBg) rightBg.style.transition = 'none';
+
+            document.querySelectorAll('.swipeable-content').forEach(other => {
+              if(other !== el) {
+                other.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
+                other.style.transform = 'translateX(0)';
+                const otherLi = other.closest('li');
+                if(otherLi) {
+                  otherLi.querySelectorAll('.swipe-actions-bg').forEach(b => {
+                    b.style.transition = 'width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease';
+                    b.style.width = '0px';
+                    b.style.opacity = '0';
+                  });
+                }
+              }
+            });
+
+            if (e.type === 'mousedown') {
+              document.addEventListener('mousemove', handleMove);
+              document.addEventListener('mouseup', handleEnd);
+            }
+          };
+
+          const handleMove = (e) => {
+            if (!isSwiping) return;
+            currentX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+            let deltaX = currentX - startX;
+
+            if (Math.abs(deltaX) > 5) swipeStarted = true;
+
+            if (deltaX > 140) deltaX = 140 + (deltaX - 140) * 0.2;
+            if (deltaX < -70) deltaX = -70 + (deltaX + 70) * 0.2;
+
+            if (deltaX > 0) {
+              if (leftBg) { leftBg.style.opacity = '1'; leftBg.style.width = `${deltaX}px`; }
+              if (rightBg) { rightBg.style.opacity = '0'; rightBg.style.width = '0px'; }
+            } else if (deltaX < 0) {
+              if (leftBg) { leftBg.style.opacity = '0'; leftBg.style.width = '0px'; }
+              if (rightBg) { rightBg.style.opacity = '1'; rightBg.style.width = `${Math.abs(deltaX)}px`; }
+            }
+
+            el.style.transform = `translateX(${deltaX}px)`;
+          };
+
+          const handleEnd = (e) => {
+            if (!isSwiping) return;
+            isSwiping = false;
+
+            if (e.type === 'mouseup') {
+              document.removeEventListener('mousemove', handleMove);
+              document.removeEventListener('mouseup', handleEnd);
+            }
+
+            const physicsCurve = 'cubic-bezier(0.25, 0.8, 0.25, 1)';
+            el.style.transition = `transform 0.3s ${physicsCurve}`;
+            if(leftBg) leftBg.style.transition = `width 0.3s ${physicsCurve}, opacity 0.3s ease`;
+            if(rightBg) rightBg.style.transition = `width 0.3s ${physicsCurve}, opacity 0.3s ease`;
+
+            if (!swipeStarted) {
+              el.style.transform = `translateX(0)`;
+              if (leftBg) leftBg.style.width = '0px';
+              if (rightBg) rightBg.style.width = '0px';
+              setTimeout(() => actionBgs.forEach(bg => bg.style.opacity = '0'), 300);
+              return;
+            }
+
+            let deltaX = currentX - startX;
+
+            if (deltaX > 60) {
+              el.style.transform = `translateX(140px)`;
+              if (leftBg) leftBg.style.width = '140px';
+            } else if (deltaX < -30) {
+              el.style.transform = `translateX(-70px)`;
+              if (rightBg) rightBg.style.width = '70px';
+            } else {
+              el.style.transform = `translateX(0)`;
+              if (leftBg) leftBg.style.width = '0px';
+              if (rightBg) rightBg.style.width = '0px';
+              setTimeout(() => actionBgs.forEach(bg => bg.style.opacity = '0'), 300);
+            }
+          };
+
+          el.addEventListener('touchstart', handleStart, {passive: true});
+          el.addEventListener('touchmove', handleMove);
+          el.addEventListener('touchend', handleEnd);
+          el.addEventListener('mousedown', handleStart);
+        });
+      };
+
+      watch(todos, (newVal) => {
+        localStorage.setItem('mobile_todos_v3', JSON.stringify(newVal));
+        nextTick(() => { attachSwipeListeners(); });
+      }, { deep: true });
+
+      const checkLocalLogin = () => {
+        const localData = localStorage.getItem('mobile_tactics_user'); const token = localStorage.getItem('mobile_token');
+        if (localData && token) { try { userInfo.value = JSON.parse(localData); myUniqueDeviceId.value = localStorage.getItem('my_device_unique_id') || ''; isLogged.value = true; fetchTacticsData(); connectWs(); } catch(e) { doLogout(); } }
+      };
+
+      let isRefreshing = false;
+      const refreshDataFromCloud = async (isSilent = false) => {
+        if (isRefreshing && !isSilent) { showToast("请勿频繁刷新"); return; }
+        isRefreshing = true; setTimeout(() => { isRefreshing = false; }, 2000);
+        await fetchTacticsData();
+        if(!isSilent) showToast("网络态势已刷新");
+      };
+
+      const fetchTacticsData = async () => {
+        try {
+          const [mRes, hRes, staffRes] = await Promise.all([ fetchWithAuth('/api/tactics/mics'), fetchWithAuth('/api/tactics/hosts'), fetchWithAuth('/api/staff') ]);
+          if (mRes.ok) mics.value = await mRes.json();
+          if (staffRes.ok) {
+            allCloudStaff.value = await staffRes.json();
+            // 🚀 核心强制断线检测：如果我被后台物理删除了档案，立刻登出踢下线
+            if (isLogged.value) {
+              const myProfile = allCloudStaff.value.find(u => String(u.id) === String(userInfo.value.id) || (u.name === userInfo.value.name && u.studentNo === userInfo.value.studentNo));
+              if (!myProfile && userInfo.value.level !== 1) {
+                customAlert("您的安全档案已被总台吊销，连接强制中断。", "🛑 权限终止");
+                setTimeout(() => {
+                  localStorage.removeItem('mobile_tactics_user');
+                  localStorage.removeItem('mobile_token');
+                  window.location.reload();
+                }, 2500);
+                return;
+              }
+            }
+          }
+          if (hRes.ok) {
+            const fetchedHosts = await hRes.json();
+            stageHosts.value = fetchedHosts.map(newHost => {
+              const oldHost = stageHosts.value.find(h => h.id === newHost.id);
+              return { ...newHost, selectedMic: oldHost ? oldHost.selectedMic : '', confirmState: false };
+            });
+          }
+        } catch(e) {}
+      };
+
+      const fetchPublicGroups = async () => {
+        try {
+          const res = await fetch(host + '/api/tactics/public/groups');
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.length) publicGroups.value = data.map(g => g.name);
+          }
+        } catch (e) {
+        }
+      };
+
+      // 🚨 增强解析：支持后端传来的多名选手数组，转换为字符串并以管道符连接
+      const formatSingerStr = (msg, fallback) => {
+        if (!msg || (!msg.data && !msg.singers)) return fallback;
+        let singerList = [];
+        if (msg.singers && Array.isArray(msg.singers)) {
+          singerList = msg.singers;
+        } else if (msg.data) {
+          singerList = Array.isArray(msg.data) ? msg.data : [msg.data];
+        }
+        if (singerList.length === 0) return fallback;
+        let formattedNames = singerList.map(s => {
+          let rawName = typeof s === 'string' ? s : (s.name || fallback);
+          rawName = rawName.replace(/^No\.\s*\d+\s*-?\s*/i, '').trim();
+          if (!rawName) return fallback;
+          return s.displayNum ? `No.${s.displayNum} ${rawName}` : rawName;
+        });
+        return formattedNames.join(' | ');
+      };
+
+      const activeContestantShort = computed(() => stageData.value.active);
+      const nextContestantShort = computed(() => stageData.value.next);
+
+      // 🚀 核心优化：将多名选手字符串还原为数组，以支持前端循环渲染出独立的操作卡片
+      const parsedActiveContestants = computed(() => {
+        if (!activeContestantShort.value || activeContestantShort.value === '未就绪' || activeContestantShort.value === '等待切场') return [];
+        return activeContestantShort.value.split(' | ').filter(s => s.trim());
+      });
+      const parsedNextContestants = computed(() => {
+        if (!nextContestantShort.value || nextContestantShort.value === '暂无安排' || nextContestantShort.value === '暂无数据') return [];
+        return nextContestantShort.value.split(' | ').filter(s => s.trim());
+      });
+
+      const extractPureName = (n) => { if (!n) return ''; let p = n.replace(/^No\.\s*\d+\s*-?\s*/i, '').trim(); return p.includes(' (') ? p.split(' (')[0].trim() : p; };
+
+      const getComputedSingerMic = (singerName) => {
+        const pureName = extractPureName(singerName);
+        const m = mics.value.find(x => x.holder === pureName);
+        return m ? m.id : '';
+      };
+
+      const directSubordinates = computed(() => allCloudStaff.value.filter(u => u.level === 3 && u.role === userInfo.value.role));
+      const myGroupLeader = computed(() => allCloudStaff.value.find(u => u.role === userInfo.value.role && u.level === 2));
+
+      // 🚀 将原本单个选手的绑定状态改为响应式对象，支持同时维护多人的选麦记录
+      const activeSingerMics = ref({}); const activeSingerConfirmStates = ref({});
+      const nextSingerMics = ref({}); const nextSingerConfirmStates = ref({});
+
+      const micSelector = ref({ show: false, targetType: '', hostIndex: null, singerName: null });
+      const openMicSelector = (type, index = null, singerName = null) => { if(!isLocked.value) micSelector.value = { show: true, targetType: type, hostIndex: index, singerName: singerName }; };
+
+      const chooseMic = (micObj) => {
+        if (!micObj.active || micObj.isBroken) return showToast("频段受限！");
+        if (micSelector.value.targetType === 'host') { stageHosts.value[micSelector.value.hostIndex].selectedMic = micObj.id; }
+        else if (micSelector.value.targetType === 'active') { activeSingerMics.value[micSelector.value.singerName] = micObj.id; }
+        else if (micSelector.value.targetType === 'next') { nextSingerMics.value[micSelector.value.singerName] = micObj.id; }
+        micSelector.value.show = false;
+      };
+
+      const submitMicAssign = (type, hostIndex = null, singerName = null) => {
+        if(isLocked.value) return; let tMic = '', tName = '';
+        if(type === 'host') {
+          const h = stageHosts.value[hostIndex]; if(!h.selectedMic) return showToast("选个麦！"); if(!h.confirmState) { h.confirmState = true; return; } tMic = h.selectedMic; tName = h.name; h.confirmState = false;
+        }
+        else if (type === 'active') {
+          if(!activeSingerMics.value[singerName]) return showToast("选个麦！"); if(!activeSingerConfirmStates.value[singerName]) { activeSingerConfirmStates.value[singerName] = true; return; } tMic = activeSingerMics.value[singerName]; tName = extractPureName(singerName); activeSingerConfirmStates.value[singerName] = false;
+        }
+        else if (type === 'next') {
+          if(!nextSingerMics.value[singerName]) return showToast("选个麦！"); if(!nextSingerConfirmStates.value[singerName]) { nextSingerConfirmStates.value[singerName] = true; return; } tMic = nextSingerMics.value[singerName]; tName = extractPureName(singerName); nextSingerConfirmStates.value[singerName] = false;
+        }
+
+        if(userInfo.value.level === 3) {
+          ws.send(JSON.stringify({ type: 'chat', channel: 'group', sender: userInfo.value.name, role: userInfo.value.role, level: userInfo.value.level, content: `[申请授权] 麦克风 [${tMic}] 给 ${tName}`, isMicRequest: true, reqMic: tMic, reqTarget: tName }));
+          showToast("已上报审批");
+        } else {
+          ws.send(JSON.stringify({ type: 'DEVICE_REPORT', sender: userInfo.value.name, role: userInfo.value.role, content: `将 [${tMic}] 分配给 ${tName}` }));
+          showToast("指派成功");
+        }
+      };
+
+      const brokenMicModal = ref({ show: false }); const openBrokenMicModal = () => { if(!isLocked.value) brokenMicModal.value.show = true; };
+      const reportBrokenMic = (micId) => {
+        if (mics.value.find(x => x.id === micId)?.isBroken) return showToast("已经在维修序列了");
+        customConfirm("🚨 故障申报确认", `确定要将麦克风 [${micId}] 标记为突发故障，并立刻向导播总台报警吗？`, true, () => {
+          if(userInfo.value.level === 3) {
+            ws.send(JSON.stringify({ type: 'chat', channel: 'group', sender: userInfo.value.name, role: userInfo.value.role, level: userInfo.value.level, content: `[申请上报故障] 麦克风 [${micId}] 异常`, isMicRequest: true, reqMic: micId, reqTarget: '维修库' }));
+            showToast("故障已上报组长审核");
+          } else {
+            ws.send(JSON.stringify({ type: 'DEVICE_REPORT', sender: userInfo.value.name, role: userInfo.value.role, content: `🚨 麦克风 [${micId}] 发生突发故障！` }));
+            showToast("故障警报已发送总控");
+          }
+          brokenMicModal.value.show = false;
+        });
+      };
+
+      const approveRequest = (idx) => { const req = pendingRequests.value[idx]; ws.send(JSON.stringify({ type: 'DEVICE_REPORT', sender: userInfo.value.name, role: userInfo.value.role, content: `[${req.targetMic}] 派给 ${req.targetName} (经审批)` })); ws.send(JSON.stringify({ type: 'chat', channel: 'group', sender: userInfo.value.name, role: userInfo.value.role, content: `@${req.sender} 审批通过 [${req.targetMic}]` })); pendingRequests.value.splice(idx, 1); };
+      const rejectRequest = (idx) => { const req = pendingRequests.value[idx]; ws.send(JSON.stringify({ type: 'chat', channel: 'group', sender: userInfo.value.name, role: userInfo.value.role, content: `@${req.sender} 申请被驳回` })); pendingRequests.value.splice(idx, 1); };
+
+      const filteredMessages = computed(() => { if(activeChannel.value === 'sos') return messages.value.filter(m => m.isSos); if(activeChannel.value === 'group') return messages.value.filter(m => !m.isSos && (m.channel === 'group' || m.channel === undefined) && (m.targetGroup === userInfo.value.role || !m.targetGroup)); return messages.value.filter(m => !m.isSos && m.channel === 'global'); });
+      const customCmds = ref(JSON.parse(localStorage.getItem('my_cmds_v3') || '["收到","异常","需支援","完成"]'));
+      const promptModal = ref({ show: false }); const confirmPrompt = () => { customCmds.value[promptModal.value.targetIndex] = promptModal.value.value; localStorage.setItem('my_cmds_v3', JSON.stringify(customCmds.value)); promptModal.value.show = false; };
+      let clickTimers = {}; const handleCmdClick = (i) => { if(clickTimers[i]) { clearTimeout(clickTimers[i]); clickTimers[i]=null; promptModal.value = { show: true, title: '修改指令', value: customCmds.value[i], targetIndex: i }; } else { clickTimers[i] = setTimeout(()=>{ clickTimers[i]=null; sendText(customCmds.value[i]); }, 300); } };
+
+      const handleSend = () => { sendText(inputText.value); };
+      const sendText = (txt) => {
+        if (!txt.trim() || !wsConnected.value || isLocked.value) return;
+        if (activeChannel.value === 'sos' && userInfo.value.level === 3) {
+          ws.send(JSON.stringify({ type: 'chat', channel: 'group', sender: userInfo.value.name, role: userInfo.value.role, level: userInfo.value.level, content: `[SOS请求] ${txt}`, isSosRequest: true, originalText: txt }));
+          showToast("SOS 已发给组长"); inputText.value = ''; return;
+        }
+        ws.send(JSON.stringify({ type: activeChannel.value==='sos'?'sos_chat':'chat', sender: userInfo.value.name, role: userInfo.value.role, level: userInfo.value.level, channel: activeChannel.value, content: txt.trim(), targetGroup: activeChannel.value==='sos'?userInfo.value.role:null }));
+        inputText.value = '';
+      };
+
+      const atModal = ref({ show: false }); const openAtModal = () => { atModal.value.show = true; };
+      const selectAt = (n) => { inputText.value += `@${n} `; atModal.value.show = false; };
+      const computedAtList = computed(() => {
+        if (userInfo.value.level === 3) {
+          return allCloudStaff.value.filter(u => u.role === userInfo.value.role && u.name !== userInfo.value.name);
+        } else if (userInfo.value.level === 2) {
+          if (activeChannel.value === 'group') {
+            return allCloudStaff.value.filter(u => u.role === userInfo.value.role && u.name !== userInfo.value.name);
+          } else {
+            let list = allCloudStaff.value.filter(u => u.level <= 2 && u.name !== userInfo.value.name);
+            list.unshift({ name: '导演组', role: '后台总控', level: 1 });
+            return list;
+          }
+        }
+        return [];
+      });
+
+      const memberDetailModal = ref({ show: false, member: null }); const actionModal = ref({ show: false, target: null, text: '' });
+      let memberClickTimer = null;
+      const handleMemberClick = (m) => { if(memberClickTimer) { clearTimeout(memberClickTimer); memberClickTimer=null; memberDetailModal.value={show:true, member:m}; } else { memberClickTimer=setTimeout(()=>{memberClickTimer=null; actionModal.value={show:true, target:m, text:''};},300); } };
+      const sendDirectAction = (t) => { if(t) ws.send(JSON.stringify({type:'chat', channel:'group', sender:userInfo.value.name, role:userInfo.value.role, content:`@${actionModal.value.target.name} ${t}`})); actionModal.value.show=false; };
+      const remoteControl = (n, act) => { ws.send(JSON.stringify({type:'SINGLE_ACTION', targetName:n, action:act})); showToast("下发成功"); };
+
+      const ackSosAlert = () => { ws.send(JSON.stringify({ type: 'SOS_ACK', sender: userInfo.value.name, content: sosFullModal.value.content })); ackedSosList.value.push(sosFullModal.value.content); sosFullModal.value.show = false; };
+      const handleBlockClick = (e) => { e.stopPropagation(); };
+
+      let ws = null;
+      const connectWs = () => {
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          wsConnected.value = true;
+          ws.send(JSON.stringify({ type: 'SYNC_MICS', mics: mics.value }));
+          ws.send(JSON.stringify({ type: 'SYNC_HOSTS', hosts: stageHosts.value }));
+
+          if(heartbeatTimer) clearInterval(heartbeatTimer);
+          heartbeatTimer = setInterval(() => {
+            if(wsConnected.value && ws) ws.send(JSON.stringify({type: 'PING'}));
+
+            const now = Date.now();
+            let changed = false;
+            users.value.forEach(u => {
+              if(u && u.online && (now - (u.lastSeen || 0) > 35000)) {
+                u.online = false;
+                changed = true;
+              }
+            });
+            if(changed) saveUsersData();
+          }, 15000);
+        };
+
+        ws.onmessage = (event) => {
+          const msg = JSON.parse(event.data);
+
+          if (msg.type === 'TACTICS_UPDATE') {
+            fetchPublicGroups();
+            fetchStaffFromCloud();
+          }
+
+          if (msg.type === 'BULK_ACTION') {
+            if (userInfo.value.level !== 1) {
+              const matchGroup = msg.group === 'all' || msg.group === userInfo.value.role;
+              const matchLevel = msg.level === 'all' || msg.level === userInfo.value.level;
+              if (matchGroup && matchLevel) {
+                if (msg.action === 'lock') isLocked.value = true;
+                else if (msg.action === 'unlock') isLocked.value = false;
+                else if (msg.action === 'kick') doLogout();
+              }
+            }
+          }
+
+          if (msg.sender && msg.sender !== '导演组') { markUserOnline(msg.sender); }
+          if (msg.type === 'DEVICE_LOGIN_SYNC') { markUserOnline(msg.username); }
+          if (msg.type === 'PING' || msg.type === 'PONG') {
+            if(msg.sender) markUserOnline(msg.sender);
+            return;
+          }
+
+          if (msg.type === 'SYNC_MICS' && msg.mics) {
+            mics.value = msg.mics;
+          }
+
+          if (msg.type === 'DELETE_TASK' && msg.taskId) {
+            todos.value = todos.value.filter(t => t.id !== msg.taskId);
+          }
+
+          if (msg.type === 'NEW_TASK' && msg.task) {
+            const t = msg.task;
+            if (t.target === 'all' || t.target === userInfo.value.role || t.target === userInfo.value.name) {
+              if (!todos.value.find(x => x.id === t.id)) {
+                todos.value.unshift(t);
+                newTaskModal.value = { show: true, task: t };
+                vibrateDevice([300, 100, 300, 100, 500]);
+              }
+            }
+          }
+
+          if (msg.type === 'SHOW_SINGER') {
+            stageData.value.active = formatSingerStr(msg, '未知选手');
+          }
+          else if (msg.type === 'NEXT_SINGER' || msg.type === 'SHOW_NEXT_SINGER' || msg.type === 'SET_NEXT_SINGER') {
+            stageData.value.next = formatSingerStr(msg, '暂无安排');
+          }
+          else if (msg.type === 'PUBLISH_SCORE') {
+            stageData.value.scores = { final: msg.data.finalScore.toFixed(2), judge: msg.data.judgeAvgScore.toFixed(2), student: msg.data.studentAvgScore.toFixed(2) };
+          }
+
+          else if (msg.type === 'chat' || msg.type === 'sos_chat') {
+            msg.isSelf = (msg.sender === userInfo.value.name); msg.isSos = (msg.type === 'sos_chat'); if(!msg.time) msg.time = new Date().toLocaleTimeString('zh-CN', {hour12: false});
+            if (msg.isSosRequest && userInfo.value.level === 2 && msg.role === userInfo.value.role) { vibrateDevice([500,200,500]); customConfirm('🚨 组员SOS', `代传：${msg.originalText}`, true, () => { ws.send(JSON.stringify({ type: 'sos_chat', sender: userInfo.value.name, role: userInfo.value.role, channel: 'sos', content: msg.originalText, targetGroup: userInfo.value.role })); }); }
+            messages.value.push(msg); nextTick(() => { if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight; });
+            if (msg.isMicRequest && userInfo.value.level === 2 && userInfo.value.role === msg.role) pendingRequests.value.push({ id: Date.now(), sender: msg.sender, targetMic: msg.reqMic, targetName: msg.reqTarget });
+            if (msg.isSos && !msg.isSelf && !ackedSosList.value.includes(msg.content) && (!msg.targetGroup || msg.targetGroup === userInfo.value.role || msg.sender==='导演组')) sosFullModal.value = { show: true, sender: msg.sender, content: msg.content };
+          }
+
+          else if (msg.type === 'DEVICE_LOGIN_SYNC' && userInfo.value.name === msg.username && myUniqueDeviceId.value !== msg.uniqueId) kickedByOtherModal.value = true;
+          else if (msg.type === 'SINGLE_ACTION' && msg.targetName === userInfo.value.name) { if (msg.action === 'lock') isLocked.value = true; else if (msg.action === 'unlock') isLocked.value = false; else if (msg.action === 'kick') doLogout(); }
+        };
+        ws.onclose = () => { wsConnected.value = false; setTimeout(connectWs, 3000); };
+      };
+
+      onMounted(() => {
+        checkLocalLogin();
+      });
+
+      return {
+        isLogged, isLoggingIn, isRequesting, wsConnected, isLocked, isSosFlashing, currentTab, activeChannel, chatBox,
+        sosFullModal, kickedByOtherModal, pendingRequests, handleBlockClick, ackSosAlert,
+
+        authView, loginForm, regForm, forgotForm, resetForm, showChangePwdView, changePwdForm,
+        doLogin, doRegister, doForgotRequest, doResetConfirm, doLogout, openChangePwdView, doChangePwd,
+        refreshDataFromCloud, clearMessages,
+
+        sysModal, customAlert, customConfirm, toastMsg, showToast, isIslandExpanded, userInfo,
+        messages, filteredMessages, inputText, handleSend, customCmds, handleCmdClick, promptModal, confirmPrompt,
+        atModal, openAtModal, selectAt, computedAtList, myGroupLeader,
+        stageData, activeContestantShort, nextContestantShort, parsedActiveContestants, parsedNextContestants,
+        stageHosts, activeSingerMics, activeSingerConfirmStates, nextSingerMics, nextSingerConfirmStates,
+        getComputedSingerMic, mics, submitMicAssign,
+        actionModal, sendDirectAction, micSelector, openMicSelector, chooseMic, brokenMicModal, openBrokenMicModal, reportBrokenMic,
+        directSubordinates, handleMemberClick, memberDetailModal, remoteControl, getMemberLogs,
+
+        ICONS, todos, activeTodos, completedTodos, currentPriority, isCompletedCollapsed,
+        showTaskOverlay, isInputAreaVisible, isEditAreaVisible, isPriorityPopoverVisible,
+        newTodo, editTodo, newTaskModal, ackNewTask,
+        changeTodoStatus, toggleTodoStatus, toggleTodoPin, deleteTodo,
+        toggleInputArea, openEditTodo, closeAllTaskPanels, openPriorityPopover, setPriority,
+        toggleEditTodoStatus, submitNewTodo
+      };
+    }
+  });
+
+  app.component('mobile-select', MobileSelect);
+  app.mount('#app');
+</script>
+</body>
+</html>

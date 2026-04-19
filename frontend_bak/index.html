@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>星裁系统 - 待办事项</title>
+    <style>
+        /* ================= 基础变量与全局设定 ================= */
+        :root {
+            --bg-color: #000000;
+            --text-main: #FFFFFF;
+            --text-sub: rgba(255, 255, 255, 0.4);
+            --accent-blue: #5E5CE6;
+            --accent-red: #FF453A;
+            --bg-green: #34C759;
+            --bg-yellow: #FFCC00;
+            --bg-orange: #FF9500;
+            --bg-red: #FF3B30;
+            --border-color: rgba(255, 255, 255, 0.1);
+
+            --radius-outer: 20px;
+            --radius-inner: 16px;
+            --padding-nest: 4px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        img {
+            -webkit-user-drag: none;
+            pointer-events: none;
+        }
+        .icon-btn img, #fab img, .priority-option img, .edit-flag-btn img { pointer-events: auto; }
+
+        /* ================= 液态玻璃质感 ================= */
+        .glass-outer {
+            background: rgba(30, 30, 30, 0.45);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-outer);
+            padding: var(--padding-nest);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-inner {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius-inner);
+            padding: 12px 16px;
+        }
+
+        /* ================= 页面布局 ================= */
+        main {
+            flex: 1;
+            padding: 20px 20px 0 20px;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        #empty-state {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: var(--text-sub);
+            font-size: 16px;
+            display: none;
+        }
+
+        ul {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        #active-task-list { margin-bottom: 20px; }
+
+        .completed-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--text-sub);
+            font-size: 16px;
+            font-weight: 500;
+            padding: 10px 4px;
+            margin-top: 10px;
+            cursor: pointer;
+        }
+        .completed-header .count-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .toggle-icon {
+            font-size: 14px;
+            transition: transform 0.3s;
+        }
+        .toggle-icon.collapsed { transform: rotate(-90deg); }
+
+        /* ================= 核心修改：折叠展开动画样式 ================= */
+        .swipeable-content {
+            position: relative;
+            z-index: 2;
+            transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            background: rgba(45, 45, 45, 0.95);
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .swipe-actions-bg {
+            position: absolute;
+            top: var(--padding-nest);
+            bottom: var(--padding-nest);
+            border-radius: var(--radius-inner);
+            overflow: hidden;
+            z-index: 1;
+            opacity: 0;
+            display: flex;
+            width: 0px; /* 初始宽度为0，由JS动态接管控制 */
+            /* 移除基础transition，由JS在手指松开时赋予过渡动画，保证跟随手指时0延迟 */
+        }
+
+        .action-left-side { left: var(--padding-nest); justify-content: flex-start; }
+        .action-right-side { right: var(--padding-nest); justify-content: flex-end; }
+
+        .action-btn {
+            /* 核心修改：改为 flex:1 让内部按钮平分父容器宽度，实现挤压/拉伸的手风琴效果 */
+            flex: 1;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            overflow: hidden; /* 防止挤压到极小时图标溢出 */
+        }
+
+        .action-btn img {
+            width: 24px;
+            height: 24px;
+            flex-shrink: 0; /* 保证图标尺寸不变，只挤压外框 */
+        }
+
+        .bg-green { background-color: var(--bg-green); }
+        .bg-yellow { background-color: var(--bg-yellow); }
+        .bg-orange { background-color: var(--bg-orange); }
+        .bg-red { background-color: var(--bg-red); }
+
+        /* ================= 任务项样式 ================= */
+        .task-item { display: flex; align-items: flex-start; }
+
+        .task-checkbox {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--text-sub);
+            border-radius: 6px;
+            margin-right: 12px;
+            margin-top: 2px;
+            flex-shrink: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .task-checkbox.high-priority {
+            border-color: var(--accent-red);
+            background-color: rgba(255, 69, 58, 0.1);
+        }
+
+        .task-item.completed { opacity: 0.5; }
+        .task-checkbox.completed {
+            background-color: var(--text-sub);
+            border-color: var(--text-sub);
+        }
+        .task-checkbox.completed::after {
+            content: '✓';
+            color: var(--bg-color);
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .task-content { flex: 1; cursor: pointer; }
+        .task-title { font-size: 16px; font-weight: 500; margin-bottom: 4px; }
+        .task-desc { font-size: 13px; color: var(--text-sub); }
+
+        /* ================= 浮动按钮及弹窗 ================= */
+        #fab {
+            position: fixed;
+            bottom: 40px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            background-color: transparent;
+            border: none;
+            box-shadow: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            z-index: 100;
+            transition: transform 0.2s;
+        }
+        #fab:active { transform: scale(0.92); }
+        #fab img { width: 56px; height: 56px; object-fit: contain; }
+
+        .bottom-sheet {
+            position: fixed;
+            bottom: 20px;
+            left: 10px;
+            right: 10px;
+            z-index: 200;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s;
+            transform: translateY(150%);
+            opacity: 0;
+        }
+        .bottom-sheet.active { transform: translateY(0); opacity: 1; }
+
+        .input-layout { display: flex; align-items: center; gap: 12px; }
+        .icon-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            background: rgba(255,255,255,0.08);
+        }
+        .icon-btn img { width: 20px; height: 20px; }
+        .submit-btn { background: var(--accent-blue); }
+
+        .input-fields { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+        .input-fields input {
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            outline: none;
+            width: 100%;
+        }
+        #title-input { font-size: 16px; font-weight: 500; }
+        #desc-input { font-size: 14px; color: var(--text-sub); }
+        .input-fields input::placeholder { color: var(--text-sub); }
+
+        #edit-area { display: flex; flex-direction: column; }
+        .edit-header { display: flex; align-items: center; gap: 12px; margin-bottom: 15px; }
+        .edit-flag-btn {
+            width: 26px;
+            height: 26px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            background: rgba(255,255,255,0.08);
+        }
+        .edit-flag-btn img { width: 16px; height: 16px; }
+
+        .edit-body { padding-left: 36px; display: flex; flex-direction: column; gap: 10px; }
+        #edit-title {
+            font-size: 20px;
+            font-weight: 600;
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            outline: none;
+            width: 100%;
+        }
+        #edit-desc {
+            font-size: 15px;
+            color: var(--text-sub);
+            background: transparent;
+            border: none;
+            outline: none;
+            width: 100%;
+            resize: none;
+            min-height: 60px;
+            font-family: inherit;
+        }
+
+        #priority-popover {
+            position: fixed;
+            bottom: 115px;
+            left: 10px;
+            width: 160px;
+            z-index: 300;
+            display: none;
+            flex-direction: column;
+        }
+        #priority-popover.active { display: flex; }
+
+        .priority-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 0;
+            font-size: 15px;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .priority-option:last-child { border-bottom: none; }
+        .priority-option img { width: 18px; height: 18px; }
+
+        #overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 150;
+            display: none;
+        }
+        #overlay.active { display: block; }
+    </style>
+</head>
+<body>
+
+<main>
+    <div id="empty-state">当前暂无任务</div>
+    <ul id="active-task-list"></ul>
+
+    <div id="completed-section" style="display: none;">
+        <div class="completed-header" id="completed-header">
+            <span>已完成</span>
+            <div class="count-wrapper">
+                <span id="completed-count">0</span>
+                <span class="toggle-icon">v</span>
+            </div>
+        </div>
+        <ul id="completed-task-list"></ul>
+    </div>
+</main>
+
+<button id="fab"><img id="fab-icon" src="" alt="Add Task"></button>
+<div id="overlay"></div>
+
+<div id="input-area" class="glass-outer bottom-sheet">
+    <div class="glass-inner input-layout">
+        <div class="icon-btn" id="priority-toggle">
+            <img id="current-priority-icon" src="" alt="Priority">
+        </div>
+        <div class="input-fields">
+            <input type="text" id="title-input" placeholder="此处为主标题" autocomplete="off">
+            <input type="text" id="desc-input" placeholder="此处为描述" autocomplete="off">
+        </div>
+        <div class="icon-btn submit-btn" id="submit-task">
+            <img id="confirm-icon" src="" alt="Confirm">
+        </div>
+    </div>
+</div>
+
+<div id="edit-area" class="glass-outer bottom-sheet">
+    <div class="glass-inner">
+        <div class="edit-header">
+            <div id="edit-checkbox" class="task-checkbox"></div>
+            <div class="edit-flag-btn" id="edit-priority-toggle">
+                <img id="edit-priority-icon" src="" alt="Priority">
+            </div>
+        </div>
+        <div class="edit-body">
+            <input type="text" id="edit-title" placeholder="任务主标题" autocomplete="off">
+            <textarea id="edit-desc" placeholder="任务详细描述..."></textarea>
+        </div>
+    </div>
+</div>
+
+<div id="priority-popover" class="glass-outer">
+    <div class="glass-inner" style="padding: 4px 12px;">
+        <div class="priority-option" data-level="high">
+            <img id="opt-high-icon" src="" alt="High"> 高优先级
+        </div>
+        <div class="priority-option" data-level="none">
+            <img id="opt-none-icon" src="" alt="None"> 无优先级
+        </div>
+    </div>
+</div>
+
+<script>
+    // ================= 环境与路径配置 =================
+    const isLocalDev = true;
+    const localPath = "./assets/";
+    const serverPath = "/var/www/scoring-system/assets/";
+    const basePath = isLocalDev ? localPath : serverPath;
+
+    const ICONS = {
+        none: basePath + "WYXJ.svg",
+        high: basePath + "GYXJ.svg",
+        confirm: basePath + "QR.svg",
+        add: basePath + "TJ.svg",
+        swipeConfirm: basePath + "QueRen.svg",
+        pin: basePath + "ZD.svg",
+        unpin: basePath + "QXZD.svg",
+        recover: basePath + "HF.svg",
+        delete: basePath + "SC.svg"
+    };
+
+    // ================= 数据状态与 DOM 初始化 =================
+    let tasks = [];
+    let currentPriority = 'none';
+    let priorityContext = 'add';
+    let editingTaskId = null;
+    let isCompletedCollapsed = false;
+
+    document.getElementById('current-priority-icon').src = ICONS.none;
+    document.getElementById('opt-high-icon').src = ICONS.high;
+    document.getElementById('opt-none-icon').src = ICONS.none;
+    document.getElementById('confirm-icon').src = ICONS.confirm;
+    document.getElementById('fab-icon').src = ICONS.add;
+
+    const dom = {
+        activeList: document.getElementById('active-task-list'),
+        completedList: document.getElementById('completed-task-list'),
+        completedSection: document.getElementById('completed-section'),
+        completedHeader: document.getElementById('completed-header'),
+        completedCount: document.getElementById('completed-count'),
+        emptyState: document.getElementById('empty-state'),
+        overlay: document.getElementById('overlay'),
+        fab: document.getElementById('fab'),
+
+        inputArea: document.getElementById('input-area'),
+        priorityToggle: document.getElementById('priority-toggle'),
+        submitBtn: document.getElementById('submit-task'),
+        titleInput: document.getElementById('title-input'),
+        descInput: document.getElementById('desc-input'),
+
+        editArea: document.getElementById('edit-area'),
+        editTitle: document.getElementById('edit-title'),
+        editDesc: document.getElementById('edit-desc'),
+        editCheckbox: document.getElementById('edit-checkbox'),
+        editPriorityToggle: document.getElementById('edit-priority-toggle'),
+        editPriorityIcon: document.getElementById('edit-priority-icon'),
+
+        priorityPopover: document.getElementById('priority-popover'),
+        options: document.querySelectorAll('.priority-option'),
+    };
+
+    // ================= 核心渲染逻辑 =================
+    function updateView() {
+        const activeTasks = tasks.filter(t => t.status === 'active');
+        const completedTasks = tasks.filter(t => t.status === 'completed');
+
+        const sortFn = (a, b) => {
+            if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+            if (a.priority !== b.priority) return a.priority === 'high' ? -1 : 1;
+            return a.id - b.id;
+        };
+
+        activeTasks.sort(sortFn);
+        completedTasks.sort(sortFn);
+
+        dom.emptyState.style.display = tasks.length === 0 ? 'block' : 'none';
+
+        renderList(dom.activeList, activeTasks, 'active');
+
+        if (completedTasks.length > 0) {
+            dom.completedSection.style.display = 'block';
+            dom.completedCount.textContent = completedTasks.length;
+            dom.completedList.style.display = isCompletedCollapsed ? 'none' : 'flex';
+            renderList(dom.completedList, completedTasks, 'completed');
+        } else {
+            dom.completedSection.style.display = 'none';
+        }
+
+        attachSwipeListeners();
+    }
+
+    function renderList(container, taskArray, listType) {
+        container.innerHTML = '';
+        taskArray.forEach(task => {
+            const li = document.createElement('li');
+            li.className = 'glass-outer';
+            li.dataset.id = task.id;
+
+            const checkboxClass = task.status === 'completed'
+                ? 'task-checkbox completed'
+                : (task.priority === 'high' ? 'task-checkbox high-priority' : 'task-checkbox');
+
+            const itemClass = task.status === 'completed' ? 'glass-inner task-item swipeable-content completed' : 'glass-inner task-item swipeable-content';
+            const pinIcon = task.isPinned ? ICONS.unpin : ICONS.pin;
+
+            // 左侧遮罩层 (右滑时显示折叠展开动画)
+            const leftMenuAction = listType === 'active'
+                ? `<div class="action-btn bg-green" onclick="changeStatus(${task.id}, 'completed')"><img src="${ICONS.swipeConfirm}"></div>`
+                : `<div class="action-btn bg-yellow" onclick="changeStatus(${task.id}, 'active')"><img src="${ICONS.recover}"></div>`;
+
+            const leftSideBG = `
+                    <div class="swipe-actions-bg action-left-side">
+                        ${leftMenuAction}
+                        <div class="action-btn bg-orange" onclick="togglePin(${task.id})">
+                            <img src="${pinIcon}">
+                        </div>
+                    </div>
+                `;
+
+            // 右侧遮罩层 (左滑时显示折叠展开动画)
+            const rightSideBG = `
+                    <div class="swipe-actions-bg action-right-side">
+                        <div class="action-btn bg-red" onclick="deleteTask(${task.id})">
+                            <img src="${ICONS.delete}">
+                        </div>
+                    </div>
+                `;
+
+            const backgroundActions = leftSideBG + rightSideBG;
+
+            li.innerHTML = `
+                    ${backgroundActions}
+                    <div class="${itemClass}">
+                        <div class="${checkboxClass}" onclick="toggleTaskStatus(event, ${task.id})"></div>
+                        <div class="task-content" onclick="openEditTask(${task.id})">
+                            <div class="task-title">${task.title}</div>
+                            <div class="task-desc">${task.desc}</div>
+                        </div>
+                    </div>
+                `;
+            container.appendChild(li);
+        });
+    }
+
+    // ================= 列表交互方法 =================
+    window.changeStatus = function(id, newStatus) {
+        const task = tasks.find(t => t.id === id);
+        if (task) { task.status = newStatus; updateView(); }
+    }
+
+    window.toggleTaskStatus = function(event, id) {
+        event.stopPropagation();
+        const task = tasks.find(t => t.id === id);
+        if (task) {
+            const newStatus = task.status === 'active' ? 'completed' : 'active';
+            changeStatus(id, newStatus);
+        }
+    }
+
+    window.togglePin = function(id) {
+        const task = tasks.find(t => t.id === id);
+        if (task) { task.isPinned = !task.isPinned; updateView(); }
+    }
+
+    window.deleteTask = function(id) {
+        tasks = tasks.filter(t => t.id !== id);
+        updateView();
+    }
+
+    // ================= 核心修改：动态折叠展开物理引擎 =================
+    function attachSwipeListeners() {
+        document.querySelectorAll('.swipeable-content').forEach(el => {
+            let startX = 0;
+            let currentX = 0;
+            let isSwiping = false;
+            let swipeStarted = false;
+
+            const li = el.closest('li');
+            const actionBgs = li.querySelectorAll('.swipe-actions-bg');
+            const leftBg = li.querySelector('.action-left-side');
+            const rightBg = li.querySelector('.action-right-side');
+
+            function handleStart(e) {
+                if (e.target.closest('.task-checkbox') || e.target.closest('.task-content')) return;
+
+                startX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+                isSwiping = true;
+                swipeStarted = false;
+
+                // 取消所有过渡，让物理反馈0延迟
+                el.style.transition = 'none';
+                if (leftBg) leftBg.style.transition = 'none';
+                if (rightBg) rightBg.style.transition = 'none';
+
+                // 复原其他已经展开的卡片
+                document.querySelectorAll('.swipeable-content').forEach(other => {
+                    if(other !== el) {
+                        other.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
+                        other.style.transform = 'translateX(0)';
+                        const otherLi = other.closest('li');
+                        if(otherLi) {
+                            otherLi.querySelectorAll('.swipe-actions-bg').forEach(b => {
+                                b.style.transition = 'width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease';
+                                b.style.width = '0px';
+                                b.style.opacity = '0';
+                            });
+                        }
+                    }
+                });
+
+                if (e.type === 'mousedown') {
+                    document.addEventListener('mousemove', handleMove);
+                    document.addEventListener('mouseup', handleEnd);
+                }
+            }
+
+            function handleMove(e) {
+                if (!isSwiping) return;
+                currentX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+                let deltaX = currentX - startX;
+
+                if (Math.abs(deltaX) > 5) swipeStarted = true;
+
+                // 物理阻尼：超过基础宽度时拉扯变得费力
+                if (deltaX > 140) deltaX = 140 + (deltaX - 140) * 0.2;
+                if (deltaX < -70) deltaX = -70 + (deltaX + 70) * 0.2;
+
+                // 动态调整宽度，实现“拉扯展开”的物理感
+                if (deltaX > 0) {
+                    if (leftBg) {
+                        leftBg.style.opacity = '1';
+                        leftBg.style.width = `${deltaX}px`;
+                    }
+                    if (rightBg) {
+                        rightBg.style.opacity = '0';
+                        rightBg.style.width = '0px';
+                    }
+                } else if (deltaX < 0) {
+                    if (leftBg) {
+                        leftBg.style.opacity = '0';
+                        leftBg.style.width = '0px';
+                    }
+                    if (rightBg) {
+                        rightBg.style.opacity = '1';
+                        rightBg.style.width = `${Math.abs(deltaX)}px`;
+                    }
+                }
+
+                el.style.transform = `translateX(${deltaX}px)`;
+            }
+
+            function handleEnd(e) {
+                if (!isSwiping) return;
+                isSwiping = false;
+
+                if (e.type === 'mouseup') {
+                    document.removeEventListener('mousemove', handleMove);
+                    document.removeEventListener('mouseup', handleEnd);
+                }
+
+                // 赋予回弹和吸附的平滑物理过渡
+                const physicsCurve = 'cubic-bezier(0.25, 0.8, 0.25, 1)';
+                el.style.transition = `transform 0.3s ${physicsCurve}`;
+                if(leftBg) leftBg.style.transition = `width 0.3s ${physicsCurve}, opacity 0.3s ease`;
+                if(rightBg) rightBg.style.transition = `width 0.3s ${physicsCurve}, opacity 0.3s ease`;
+
+                if (!swipeStarted) {
+                    el.style.transform = `translateX(0)`;
+                    if (leftBg) leftBg.style.width = '0px';
+                    if (rightBg) rightBg.style.width = '0px';
+                    setTimeout(() => actionBgs.forEach(bg => bg.style.opacity = '0'), 300);
+                    return;
+                }
+
+                let deltaX = currentX - startX;
+
+                // 吸附判定
+                if (deltaX > 60) {
+                    el.style.transform = `translateX(140px)`;
+                    if (leftBg) leftBg.style.width = '140px';
+                } else if (deltaX < -30) {
+                    el.style.transform = `translateX(-70px)`;
+                    if (rightBg) rightBg.style.width = '70px';
+                } else {
+                    el.style.transform = `translateX(0)`;
+                    if (leftBg) leftBg.style.width = '0px';
+                    if (rightBg) rightBg.style.width = '0px';
+                    setTimeout(() => actionBgs.forEach(bg => bg.style.opacity = '0'), 300);
+                }
+            }
+
+            el.addEventListener('touchstart', handleStart, {passive: true});
+            el.addEventListener('touchmove', handleMove);
+            el.addEventListener('touchend', handleEnd);
+            el.addEventListener('mousedown', handleStart);
+        });
+    }
+
+    // ================= 面板与事件逻辑 =================
+    window.openEditTask = function(id) {
+        const task = tasks.find(t => t.id === id);
+        if (!task) return;
+        editingTaskId = id;
+
+        dom.editTitle.value = task.title;
+        dom.editDesc.value = task.desc;
+        dom.editPriorityIcon.src = ICONS[task.priority];
+
+        dom.editCheckbox.className = task.status === 'completed'
+            ? 'task-checkbox completed'
+            : (task.priority === 'high' ? 'task-checkbox high-priority' : 'task-checkbox');
+
+        dom.overlay.classList.add('active');
+        dom.editArea.classList.add('active');
+    }
+
+    dom.editTitle.addEventListener('input', (e) => {
+        if(editingTaskId) tasks.find(t => t.id === editingTaskId).title = e.target.value;
+    });
+    dom.editDesc.addEventListener('input', (e) => {
+        if(editingTaskId) tasks.find(t => t.id === editingTaskId).desc = e.target.value;
+    });
+
+    dom.editCheckbox.addEventListener('click', (e) => {
+        if (!editingTaskId) return;
+        const task = tasks.find(t => t.id === editingTaskId);
+        if (task) {
+            task.status = task.status === 'active' ? 'completed' : 'active';
+            e.currentTarget.className = task.status === 'completed'
+                ? 'task-checkbox completed'
+                : (task.priority === 'high' ? 'task-checkbox high-priority' : 'task-checkbox');
+        }
+    });
+
+    function toggleInputArea(show) {
+        if (show) {
+            dom.overlay.classList.add('active');
+            dom.inputArea.classList.add('active');
+            dom.titleInput.focus();
+        } else {
+            dom.inputArea.classList.remove('active');
+            dom.titleInput.value = '';
+            dom.descInput.value = '';
+            setPriority('none');
+        }
+    }
+
+    dom.overlay.addEventListener('click', () => {
+        dom.overlay.classList.remove('active');
+        dom.priorityPopover.classList.remove('active');
+
+        if (editingTaskId) {
+            editingTaskId = null;
+            dom.editArea.classList.remove('active');
+            updateView();
+        } else {
+            toggleInputArea(false);
+        }
+    });
+
+    dom.fab.addEventListener('click', () => toggleInputArea(true));
+
+    dom.priorityToggle.addEventListener('click', () => {
+        priorityContext = 'add';
+        dom.priorityPopover.classList.toggle('active');
+    });
+
+    dom.editPriorityToggle.addEventListener('click', () => {
+        priorityContext = 'edit';
+        dom.priorityPopover.classList.toggle('active');
+    });
+
+    function setPriority(level) {
+        currentPriority = level;
+        document.getElementById('current-priority-icon').src = ICONS[level];
+        dom.priorityPopover.classList.remove('active');
+    }
+
+    dom.options.forEach(opt => {
+        opt.addEventListener('click', (e) => {
+            const level = e.currentTarget.dataset.level;
+            if (priorityContext === 'add') {
+                setPriority(level);
+            } else if (priorityContext === 'edit' && editingTaskId) {
+                const task = tasks.find(t => t.id === editingTaskId);
+                if (task) {
+                    task.priority = level;
+                    dom.editPriorityIcon.src = ICONS[level];
+                    if (task.status !== 'completed') {
+                        dom.editCheckbox.className = level === 'high' ? 'task-checkbox high-priority' : 'task-checkbox';
+                    }
+                }
+                dom.priorityPopover.classList.remove('active');
+            }
+        });
+    });
+
+    dom.submitBtn.addEventListener('click', () => {
+        const title = dom.titleInput.value.trim();
+        const desc = dom.descInput.value.trim();
+
+        if (title) {
+            tasks.push({
+                id: Date.now(),
+                title,
+                desc,
+                priority: currentPriority,
+                status: 'active',
+                isPinned: false
+            });
+            updateView();
+            dom.overlay.click();
+        }
+    });
+
+    dom.completedHeader.addEventListener('click', () => {
+        isCompletedCollapsed = !isCompletedCollapsed;
+        dom.completedList.style.display = isCompletedCollapsed ? 'none' : 'flex';
+        dom.completedHeader.querySelector('.toggle-icon').classList.toggle('collapsed');
+    });
+
+    updateView();
+</script>
+</body>
+</html>

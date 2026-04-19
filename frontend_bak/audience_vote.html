@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>星裁系统 · 大众端互动平台</title>
+    <script src="https://cdn.staticfile.net/echarts/5.5.0/echarts.min.js"></script>
+    <style>
+
+        :root {
+            --bg-dark: #000000; --card-glass: rgba(28, 28, 30, 0.65); --card-border: rgba(255, 255, 255, 0.08);
+            --apple-blue: #0A84FF; --apple-orange: #FF9F0A; --apple-red: #FF453A; --apple-green: #32D74B;
+            --text-main: #FFFFFF; --text-sub: #EBEBF599;
+
+            --font-family-base: -apple-system, "SF Pro Display", sans-serif;
+            --font-family-kaiti: 'KaiTi', 'STKaiti', 'BiauKai', serif;
+        }
+
+        * { box-sizing: border-box; }
+
+        body { margin: 0; background-color: var(--bg-dark); color: var(--text-main); font-family: var(--font-family-base); height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; -webkit-font-smoothing: antialiased; transform: translateZ(0); }
+        .bg-layer { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; height: 100dvh; background: radial-gradient(circle at 50% -20%, #1e3a8a 0%, #000000 70%); z-index: -1; transition: background 0.5s ease; will-change: background; }
+
+        .header { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; padding-top: max(15px, env(safe-area-inset-top)); z-index: 100; }
+        .net-status { background: rgba(255,255,255,0.1); padding: 4px 12px; border-radius: 20px; font-size: 12px; display: flex; align-items: center; gap: 6px; backdrop-filter: blur(10px); color: #FFFFFF; }
+        .net-dot { width: 8px; height: 8px; background: #32D74B; border-radius: 50%; box-shadow: 0 0 8px #32D74B; animation: pulse 2s infinite; }
+
+        .page-container { flex: 1; overflow-y: auto; padding: 0 15px; padding-bottom: calc(85px + env(safe-area-inset-bottom)); scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
+        .page { display: none; opacity: 0; transition: opacity 0.3s ease; flex-direction: column; gap: 15px; }
+        .page.active { display: flex; opacity: 1; animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .glass-card { background: rgba(35, 35, 40, 0.75); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 24px; padding: 24px 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); margin-bottom: 5px; position: relative; overflow: hidden;}
+
+        .live-info-box { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+
+        .live-status-badge { font-size: 14px; color: #0A84FF; font-weight: bold; margin-bottom: 12px; letter-spacing: 3px; text-transform: uppercase; text-shadow: 0 0 10px rgba(10,132,255,0.4); }
+        .live-name { font-size: 40px; font-weight: 900; margin: 0 0 5px 0; letter-spacing: 2px; color: #FFFFFF; }
+        .live-class { color: #A1A1A6; font-size: 14px; margin-bottom: 10px; }
+        .live-song { font-size: 20px; color: #FF9F0A; margin: 0; font-weight: 700; }
+
+        .module-title { font-size: 16px; font-weight: 700; margin-bottom: 15px; color: #FFFFFF; display: flex; align-items: center; gap: 8px; }
+
+        /* ================= 投票模块样式 ================= */
+        .vote-display-box { text-align: center; margin-bottom: 20px; }
+        .vote-big-score { font-size: 75px; font-weight: 900; color: #0A84FF; font-family: 'Consolas', monospace; height: 90px; line-height: 90px; text-shadow: 0 0 20px rgba(10,132,255,0.4); }
+
+        .numpad-100 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 10px; }
+        .btn-num { background: rgba(255,255,255,0.1); border-radius: 16px; height: 60px; display: flex; justify-content: center; align-items: center; font-size: 28px; font-weight: 600; cursor: pointer; transition: 0.1s; border: 1px solid rgba(255,255,255,0.05); color: #FFFFFF; user-select: none; -webkit-tap-highlight-color: transparent;}
+        .btn-num:active { transform: scale(0.92); background: rgba(255,255,255,0.2); }
+
+        /* 🚀 核心重构：10分制极简 3x3 + 底托 布局 */
+        .numpad-10 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 10px;
+            justify-items: center;
+        }
+        .circle-btn {
+            width: 70px; height: 70px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.05);
+            border: 2px solid rgba(255,255,255,0.1);
+            font-size: 28px; font-weight: bold;
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; transition: 0.2s; color: #FFFFFF;
+            user-select: none; -webkit-tap-highlight-color: transparent;
+        }
+        .circle-btn:active { transform: scale(0.9); }
+        .circle-btn.selected {
+            background: #0A84FF; border-color: #0A84FF;
+            transform: scale(1.05); box-shadow: 0 0 20px rgba(10,132,255,0.5); color: #fff;
+        }
+        /* 10分的底托大按钮 */
+        .circle-btn-wide {
+            grid-column: 1 / -1; /* 横跨三列 */
+            width: 100%;
+            height: 60px;
+            border-radius: 30px;
+            background: rgba(255,255,255,0.05);
+            border: 2px solid rgba(255,255,255,0.1);
+            font-size: 26px; font-weight: bold;
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; transition: 0.2s; color: #FFFFFF;
+            user-select: none; -webkit-tap-highlight-color: transparent;
+        }
+        .circle-btn-wide:active { transform: scale(0.95); }
+        .circle-btn-wide.selected {
+            background: #0A84FF; border-color: #0A84FF;
+            box-shadow: 0 0 20px rgba(10,132,255,0.5); color: #fff;
+        }
+
+        .btn-submit { background: linear-gradient(135deg, #0A84FF, #32D74B); color: #FFFFFF; border: none; border-radius: 16px; height: 65px; font-size: 20px; font-weight: bold; width: 100%; margin-top: 25px; box-shadow: 0 5px 15px rgba(10,132,255,0.4); transition: 0.2s; -webkit-tap-highlight-color: transparent; z-index: 10;}
+        .btn-submit:active { transform: scale(0.96); }
+
+        /* 🚀 新增：投票未开启时的防呆遮罩层 */
+        #vote-disabled-mask {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(8px);
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        #vote-disabled-mask.show { opacity: 1; pointer-events: auto; }
+        .mask-icon { font-size: 50px; margin-bottom: 10px; }
+        .mask-text { color: white; font-size: 18px; font-weight: bold; letter-spacing: 2px;}
+
+        /* ================= 其他样式 ================= */
+        .rank-item { display: flex; align-items: center; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .rank-item:last-child { border-bottom: none; }
+        .rank-num { width: 35px; font-size: 22px; font-weight: 900; font-style: italic; color: #8E8E93; }
+        .rank-name { flex: 1; font-size: 16px; font-weight: 600; display:flex; flex-direction:column; color: #FFFFFF; }
+        .rank-score { font-size: 20px; font-weight: bold; font-family: 'Consolas', monospace; color: #FF9F0A; margin-right: 5px; }
+
+        .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(20, 20, 22, 0.9); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px); border-top: 0.5px solid rgba(255,255,255,0.15); display: flex; justify-content: space-around; padding: 12px 0; padding-bottom: max(15px, env(safe-area-inset-bottom)); z-index: 999; transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); will-change: transform;}
+        .nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; color: #8E8E93; font-size: 11px; font-weight: 600; transition: 0.2s; width: 60px; cursor: pointer; -webkit-tap-highlight-color: transparent;}
+        .nav-item.active { color: #0A84FF; transform: scale(1.05); }
+        .nav-icon { font-size: 22px; }
+
+        .toast { position: fixed; top: 40px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.95); color: black; padding: 12px 24px; border-radius: 30px; font-size: 14px; font-weight: bold; opacity: 0; transition: 0.3s; z-index: 9999999; box-shadow: 0 10px 20px rgba(0,0,0,0.2); pointer-events: none;}
+        .toast.show { opacity: 1; top: 60px; }
+
+        .chart-box { width: 100%; border-radius: 12px; overflow: hidden; background: rgba(0,0,0,0.15); }
+        #divergence-chart { height: 260px; }
+
+        @keyframes quantumFadeIn {
+            0% { transform: scale(0.1); opacity: 0; filter: blur(20px) drop-shadow(0 0 0px rgba(10,132,255,0)); }
+            50% { transform: scale(1.1); opacity: 0.9; filter: blur(2px) drop-shadow(0 0 40px rgba(10,132,255,0.8)); }
+            100% { transform: scale(1); opacity: 1; filter: blur(0px) drop-shadow(0 0 15px rgba(10,132,255,0.4)); }
+        }
+        @keyframes unfoldCenter { 0% { clip-path: inset(0 50% 0 50%); opacity: 0; transform: scale(0.9); } 100% { clip-path: inset(0 0 0 0); opacity: 1; transform: scale(1); } }
+        @keyframes fadeIn { 0% { opacity: 0; } 100% { opacity: 1; } }
+
+        /* ================= 震撼开屏动画样式 ================= */
+        #splash-screen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; height: 100dvh; background-color: #000000; z-index: 9999999; display: flex; flex-direction: column; justify-content: space-between; align-items: center; transition: opacity 0.8s ease-out; }
+        .splash-main { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; margin-top: -10vh; }
+        .splash-logo { width: 140px; margin-bottom: 25px; animation: quantumFadeIn 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .splash-title-zh { font-family: var(--font-family-kaiti); color: #FFFFFF; font-size: 26px; letter-spacing: 4px; margin-bottom: 8px; animation: unfoldCenter 1.5s cubic-bezier(0.25, 1, 0.5, 1) forwards; white-space: nowrap; }
+        .splash-title-en { font-family: var(--font-family-base); color: rgba(255, 255, 255, 0.6); font-size: 11px; letter-spacing: 3px; text-transform: uppercase; animation: unfoldCenter 1.5s cubic-bezier(0.25, 1, 0.5, 1) forwards; animation-delay: 0.2s; opacity: 0; white-space: nowrap; }
+        .splash-footer { font-family: var(--font-family-kaiti); color: rgba(255, 255, 255, 0.3); font-size: 14px; letter-spacing: 6px; padding-bottom: max(40px, env(safe-area-inset-bottom)); animation: fadeIn 2s ease-in forwards; }
+
+        /* ================= 强锁界面定制 ================= */
+        #emergency-lock-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; height: 100dvh; background: #000000; z-index: 999999; display: none; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; box-sizing: border-box; }
+        .lock-container { display: flex; flex-direction: column; align-items: center; margin-top: -15vh; }
+        .lock-logo { width: 130px; margin-bottom: 35px; animation: quantumFadeIn 1.5s cubic-bezier(0.16, 1, 0.3, 1) infinite alternate; }
+        #emergency-lock-overlay h2 { font-family: var(--font-family-kaiti); color: #FFFFFF; font-size: 26px; margin-bottom: 15px; letter-spacing: 3px; font-weight: normal; animation: unfoldCenter 1.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;}
+        #emergency-lock-overlay h1 { font-family: var(--font-family-base); color: #FF453A; font-size: 32px; letter-spacing: 5px; margin: 0; font-weight: 900; text-shadow: 0 0 20px rgba(255,69,58,0.5); animation: unfoldCenter 1.5s cubic-bezier(0.25, 1, 0.5, 1) forwards; animation-delay: 0.2s; opacity: 0; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(50, 215, 75, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(50, 215, 75, 0); } 100% { box-shadow: 0 0 0 0 rgba(50, 215, 75, 0); } }
+
+        /* ================= 🎟️ 门票拦截界面定制 ================= */
+        #ticket-lock-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; height: 100dvh; background: #000000; z-index: 9999999; display: none; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; box-sizing: border-box; }
+        .ticket-icon { font-size: 80px; margin-bottom: 20px; animation: quantumFadeIn 1s forwards; }
+        #ticket-lock-msg { font-family: var(--font-family-base); color: #FF453A; font-size: 20px; letter-spacing: 2px; margin: 0; font-weight: bold; line-height: 1.5; }
+    </style>
+</head>
+<body>
+
+<div id="splash-screen">
+    <div></div> <div class="splash-main">
+    <img src="assets/XCLOGO.webp" class="splash-logo" alt="LOGO" onerror="this.style.display='none'">
+    <div class="splash-title-zh">星裁系统·大众评委端</div>
+    <div class="splash-title-en">StarJudge · Public Judge End</div>
+</div>
+    <div class="splash-footer">宣甫 · 原創</div>
+</div>
+
+<div class="bg-layer" id="main-bg"></div>
+<div id="toast-container" class="toast">✅ 提示</div>
+
+<div id="emergency-lock-overlay">
+    <div class="lock-container">
+        <img src="assets/XCLOGO.webp" class="lock-logo" alt="LOGO" onerror="this.style.display='none'">
+        <h2>星裁系统·大众评委端</h2>
+        <h1>系统紧急安全熔断</h1>
+    </div>
+</div>
+
+<div id="ticket-lock-overlay">
+    <div class="lock-container">
+        <div class="ticket-icon">🎟️</div>
+        <h2 style="font-family: var(--font-family-kaiti); color: #FFFFFF; font-size: 26px; margin-bottom: 15px; letter-spacing: 3px; font-weight: normal;">星裁系统·大众端</h2>
+        <h1 id="ticket-lock-msg">访问被拒绝</h1>
+    </div>
+</div>
+
+<div class="header">
+    <div id="sys-title" style="font-size: 18px; font-weight: 800; letter-spacing: 1px; display:flex; align-items:center; color: #0A84FF;">
+        🌟 大众互动台
+    </div>
+    <div style="display:flex; gap:10px; align-items:center;">
+        <div class="net-status"><div class="net-dot" id="net-indicator" style="background:#FF453A; box-shadow: 0 0 8px #FF453A;"></div> <span id="net-text">等待授权</span></div>
+    </div>
+</div>
+
+<div class="page-container">
+
+    <div id="page-vote" class="page">
+        <div class="glass-card" style="margin-top: 10px;" id="vote-card-container">
+
+            <div id="vote-disabled-mask" class="show">
+                <div class="mask-icon">🔒</div>
+                <div class="mask-text">当前未开启打分</div>
+            </div>
+
+            <div style="text-align: center; color: #A1A1A6; font-size: 14px; margin-bottom: 15px;">当前正在为 <b id="vote-singer-name" style="color:white; font-size: 16px;">--</b> 打分</div>
+            <div class="vote-display-box"><div class="vote-big-score" id="vote-score-display">--</div></div>
+
+            <div class="numpad-100" id="numpad-100">
+                <div class="btn-num" onclick="press('1')">1</div><div class="btn-num" onclick="press('2')">2</div><div class="btn-num" onclick="press('3')">3</div>
+                <div class="btn-num" onclick="press('4')">4</div><div class="btn-num" onclick="press('5')">5</div><div class="btn-num" onclick="press('6')">6</div>
+                <div class="btn-num" onclick="press('7')">7</div><div class="btn-num" onclick="press('8')">8</div><div class="btn-num" onclick="press('9')">9</div>
+                <div class="btn-num" onclick="myScore=''; updateDisplay();" style="color:#FF453A; font-size: 16px;">清空</div>
+                <div class="btn-num" onclick="press('0')">0</div>
+                <div class="btn-num" onclick="myScore=myScore.slice(0,-1); updateDisplay();" style="font-size: 16px;">删除</div>
+            </div>
+
+            <div class="numpad-10" id="numpad-10" style="display: none;">
+                <div class="circle-btn" onclick="directScore('1', this)">1</div>
+                <div class="circle-btn" onclick="directScore('2', this)">2</div>
+                <div class="circle-btn" onclick="directScore('3', this)">3</div>
+                <div class="circle-btn" onclick="directScore('4', this)">4</div>
+                <div class="circle-btn" onclick="directScore('5', this)">5</div>
+                <div class="circle-btn" onclick="directScore('6', this)">6</div>
+                <div class="circle-btn" onclick="directScore('7', this)">7</div>
+                <div class="circle-btn" onclick="directScore('8', this)">8</div>
+                <div class="circle-btn" onclick="directScore('9', this)">9</div>
+                <div class="circle-btn-wide" onclick="directScore('10', this)">10</div>
+            </div>
+
+            <button class="btn-submit" id="btn-submit-vote" onclick="doSubmitVote()">提交分数</button>
+        </div>
+    </div>
+
+    <div id="page-home" class="page active">
+        <div class="glass-card">
+            <div class="live-info-box">
+                <div class="live-status-badge">LIVE 正在演唱</div>
+                <div class="live-name" id="home-name">等待开场</div>
+                <div class="live-class" id="home-class">---</div>
+                <div class="live-song" id="home-song">《未知曲目》</div>
+            </div>
+        </div>
+
+        <div class="glass-card">
+            <div class="module-title">📊 评委与大众认知分歧雷达</div>
+            <div class="chart-box" id="divergence-chart"></div>
+            <div style="display:flex; justify-content:center; gap:15px; font-size:10px; color:#A1A1A6; margin-top:15px;">
+                <span><span style="color:#0A84FF;">■</span> 大众均分</span>
+                <span><span style="color:#FFFFFF;">■</span> 专业均分</span>
+                <span>柱体：分歧度</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="page-rank" class="page">
+        <div class="glass-card">
+            <div class="module-title" style="font-size: 20px;">🏆 实时赛果总榜</div>
+            <div id="full-rank-container"><div style="text-align: center; color: #8E8E93; font-size: 13px; padding: 30px 0;">正在拉取选手数据...</div></div>
+        </div>
+    </div>
+
+</div>
+
+<div class="bottom-nav" id="bottom-nav">
+    <div class="nav-item" onclick="switchTab('vote', this)" id="nav-vote"><div class="nav-icon">🗳️</div>投票</div>
+    <div class="nav-item active" onclick="switchTab('home', this)" id="nav-home"><div class="nav-icon">🏠</div>主页</div>
+    <div class="nav-item" onclick="switchTab('rank', this)" id="nav-rank"><div class="nav-icon">🏆</div>榜单</div>
+</div>
+
+<script>
+    const currentProtocol = window.location.protocol;
+    const currentHostname = window.location.hostname;
+
+    const isDesktopApp = currentProtocol === 'file:' ||
+        currentProtocol.includes('tauri') ||
+        currentHostname.includes('tauri') ||
+        currentHostname === 'localhost' ||
+        currentHostname === '127.0.0.1';
+
+    const host = isDesktopApp ? "https://xuanfu.asia" : currentProtocol + '//' + window.location.host;
+    const wsUrl = isDesktopApp ? "wss://xuanfu.asia/ws/screen" : (currentProtocol === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/ws/screen';
+
+    const domBottomNav = document.getElementById('bottom-nav');
+    const domEmergencyLock = document.getElementById('emergency-lock-overlay');
+    const domTicketLock = document.getElementById('ticket-lock-overlay');
+    const domVoteScore = document.getElementById('vote-score-display');
+    const domSubmitBtn = document.getElementById('btn-submit-vote');
+    const splashScreen = document.getElementById('splash-screen');
+    const voteMask = document.getElementById('vote-disabled-mask');
+
+    let currentId = null; let myScore = ""; let sysScale = 100;
+    let allContestantsData = []; let isForceVoting = false;
+    let isEmergencyLocked = false;
+
+    let divergenceChartInstance = null;
+
+    let deviceId = localStorage.getItem('audience_device_id');
+    if (!deviceId) {
+        deviceId = 'AUD_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+        localStorage.setItem('audience_device_id', deviceId);
+    }
+
+    function getAuthHeaders(isJson = false) {
+        const headers = {};
+        if (isJson) headers['Content-Type'] = 'application/json';
+        const token = localStorage.getItem('audience_token');
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        return headers;
+    }
+
+    function showTicketLock(msgHtml) {
+        if (splashScreen) splashScreen.style.display = 'none';
+        document.getElementById('ticket-lock-msg').innerHTML = msgHtml;
+        domTicketLock.style.display = 'flex';
+    }
+
+    async function verifyTicket() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const ticket = urlParams.get('ticket');
+
+        if (!ticket) {
+            showTicketLock("非法访问：缺少通行凭证！<br><span style='font-size:14px; color:#A1A1A6; font-weight:normal; margin-top:10px; display:inline-block'>请扫描现场大屏幕最新的二维码进入</span>");
+            return;
+        }
+
+        const formData = new URLSearchParams();
+        formData.append('role', 'audience');
+        formData.append('ticket', ticket);
+
+        try {
+            const res = await fetch(host + '/api/scores/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData.toString()
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                showTicketLock(errorData.error || "二维码已过期或无效！<br><span style='font-size:14px; color:#A1A1A6; font-weight:normal; margin-top:10px; display:inline-block'>本场活动门票已重置，请重新扫码</span>");
+                return;
+            }
+
+            const data = await res.json();
+            if(data.token) {
+                localStorage.setItem('audience_token', data.token);
+            }
+
+            startupSystem();
+
+        } catch (e) {
+            showTicketLock("网络异常，无法验证通行凭证！");
+        }
+    }
+
+    window.addEventListener('load', verifyTicket);
+
+    function startupSystem() {
+        initCharts();
+        silentPollSystemData();
+        connectWS();
+
+        if (splashScreen) {
+            setTimeout(() => {
+                splashScreen.style.opacity = '0';
+                setTimeout(() => { splashScreen.style.display = 'none'; }, 800);
+            }, 1000);
+        }
+
+        setInterval(silentPollSystemData, 8000);
+    }
+
+    function showToast(msg) { const t = document.getElementById('toast-container'); t.innerText = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2500); }
+
+    function switchTab(targetId, el) {
+        let hasVotedForCurrent = localStorage.getItem('voted_' + currentId) === 'true';
+        if (isForceVoting && targetId !== 'vote' && !hasVotedForCurrent) {
+            return showToast("⚠️ 请先完成当前选手的打分！");
+        }
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        document.getElementById('page-' + targetId).classList.add('active'); if(el) el.classList.add('active'); else document.getElementById('nav-' + targetId).classList.add('active');
+
+        if(targetId === 'home') {
+            setTimeout(() => { if(divergenceChartInstance) divergenceChartInstance.resize(); }, 100);
+        }
+    }
+
+    function updateScaleUI() {
+        if(sysScale === 10) {
+            document.getElementById('numpad-100').style.display = 'none';
+            document.getElementById('numpad-10').style.display = 'grid';
+        } else {
+            document.getElementById('numpad-100').style.display = 'grid';
+            document.getElementById('numpad-10').style.display = 'none';
+        }
+        myScore = ""; updateDisplay();
+        document.querySelectorAll('.circle-btn').forEach(b => b.classList.remove('selected'));
+        document.querySelector('.circle-btn-wide').classList.remove('selected');
+    }
+
+    function checkEmergencyLock(conf) {
+        isEmergencyLocked = conf.lockAudience;
+        domEmergencyLock.style.display = isEmergencyLocked ? 'flex' : 'none';
+    }
+
+    // 🚀 控制防呆遮罩层
+    function updateVotingMask(isOpen, hasVoted) {
+        if (!isOpen) {
+            voteMask.classList.add('show');
+            voteMask.innerHTML = `<div class="mask-icon">🔒</div><div class="mask-text">当前未开启打分</div>`;
+        } else if (hasVoted) {
+            voteMask.classList.add('show');
+            voteMask.innerHTML = `<div class="mask-icon">✅</div><div class="mask-text">您已完成打分</div>`;
+        } else {
+            voteMask.classList.remove('show');
+        }
+    }
+
+    function initCharts() {
+        divergenceChartInstance = echarts.init(document.getElementById('divergence-chart'));
+        window.addEventListener('resize', () => { divergenceChartInstance.resize(); });
+    }
+
+    function renderDivergenceChart(contestants) {
+        const chartDom = document.getElementById('divergence-chart');
+        if(!chartDom) return;
+
+        let displayList = [...contestants].sort((a,b) => (a.sortOrder || a.id) - (b.sortOrder || b.id));
+
+        if(displayList.length === 0) {
+            displayList = [
+                { name: '一号位', judgeAvgScore: 0, studentAvgScore: 0 },
+                { name: '二号位', judgeAvgScore: 0, studentAvgScore: 0 }
+            ];
+        }
+
+        if(!divergenceChartInstance) {
+            chartDom.innerHTML = '';
+            divergenceChartInstance = echarts.init(chartDom);
+        }
+
+        const names = []; const judgeScores = []; const audScores = []; const diffs = [];
+        displayList.forEach(c => {
+            let shortName = c.name; if(shortName.length > 4) shortName = shortName.substring(0,4) + '..';
+            names.push(shortName);
+            const js = c.judgeAvgScore || 0; const as = c.studentAvgScore || 0;
+            judgeScores.push(js); audScores.push(as); diffs.push(Math.abs(js - as).toFixed(2));
+        });
+
+        const option = {
+            tooltip: { show: false }, grid: { top: 20, bottom: 25, left: 25, right: 10 },
+            xAxis: { type: 'category', data: names, axisLabel: { color: '#8E8E93', fontSize: 10, interval: 0, overflow: 'truncate', width: 40 }, axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }, axisTick: { show: false } },
+            // 🚀 核心修复：Y轴硬编码锁定在 0~100 之间，不再随系统刻度乱跳
+            yAxis: { type: 'value', min: 0, max: 100, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)', type: 'dashed' } }, axisLabel: { color: '#8E8E93', fontSize: 10 } },
+            visualMap: { show: false, seriesIndex: 2, min: 0, max: 15, inRange: { color: ['#0A84FF', '#FF9F0A', '#FF453A'] } },
+            series: [
+                { name: '专业', type: 'line', data: judgeScores, smooth: true, symbolSize: 6, itemStyle: { color: '#FFFFFF' }, lineStyle: { width: 2 } },
+                { name: '大众', type: 'line', data: audScores, smooth: true, symbolSize: 6, itemStyle: { color: '#0A84FF' }, lineStyle: { width: 2 } },
+                { name: '分歧度', type: 'bar', data: diffs, barWidth: '40%', itemStyle: { borderRadius: [4, 4, 0, 0] }, z: -1 }
+            ]
+        };
+        divergenceChartInstance.setOption(option);
+    }
+
+    async function silentPollSystemData() {
+        try {
+            const confRes = await fetch(`${host}/api/scores/config?deviceId=${deviceId}&isCadre=false&t=${Date.now()}`, { headers: getAuthHeaders() });
+            if (!confRes.ok) return;
+
+            const conf = await confRes.json();
+            sysScale = conf.scoreScale;
+            updateScaleUI();
+            checkEmergencyLock(conf);
+            isForceVoting = conf.isVotingOpen;
+
+            try {
+                let conRes = await fetch(`${host}/api/scores/rankings?t=${Date.now()}`, { headers: getAuthHeaders() });
+                if(!conRes.ok || conRes.status === 404) {
+                    conRes = await fetch(`${host}/api/admin/contestants?t=${Date.now()}`, { headers: getAuthHeaders() });
+                }
+                if (conRes.ok) allContestantsData = await conRes.json();
+                else allContestantsData = [];
+            } catch (err) {
+                allContestantsData = [];
+            }
+
+            renderDivergenceChart(allContestantsData);
+            renderRankings();
+
+            if (conf.activeContestantId != null && conf.activeContestantId !== 0) {
+                currentId = conf.activeContestantId;
+                const currentSinger = allContestantsData.find(c => c.id == currentId);
+
+                document.getElementById('home-name').innerText = currentSinger ? currentSinger.name : "--";
+                document.getElementById('home-song').innerText = currentSinger && currentSinger.songName ? `《${currentSinger.songName}》` : "《未知曲目》";
+                document.getElementById('home-class').innerText = currentSinger ? currentSinger.className : '';
+                document.getElementById('vote-singer-name').innerText = currentSinger ? currentSinger.name : "--";
+
+                const hasVoted = localStorage.getItem('voted_' + currentId) === 'true';
+
+                // 实时评估防呆遮罩
+                updateVotingMask(conf.isVotingOpen, hasVoted);
+
+                if(hasVoted) {
+                    domSubmitBtn.innerText = "✅ 已完成打分"; domSubmitBtn.style.background = "#32D74B"; domSubmitBtn.disabled = true;
+                } else {
+                    domSubmitBtn.innerText = "提交分数"; domSubmitBtn.style.background = "linear-gradient(135deg, #0A84FF, #32D74B)"; domSubmitBtn.disabled = false;
+                }
+
+                if (conf.isVotingOpen && !hasVoted) {
+                    if(!document.getElementById('page-vote').classList.contains('active')) {
+                        switchTab('vote'); domBottomNav.style.transform = 'translateY(100%)';
+                    }
+                } else {
+                    if(document.getElementById('page-vote').classList.contains('active') && conf.isVotingOpen) {
+                        // 仍保留在投票页，但被遮罩挡住
+                    } else if (!conf.isVotingOpen) {
+                        switchTab('home'); domBottomNav.style.transform = 'translateY(0)';
+                    }
+                }
+
+            } else {
+                currentId = null;
+                document.getElementById('home-name').innerText = "等待开场";
+                document.getElementById('home-song').innerText = "《未知曲目》";
+                document.getElementById('home-class').innerText = "---";
+                document.getElementById('vote-singer-name').innerText = "--";
+                updateVotingMask(false, false);
+            }
+        } catch (e) {}
+    }
+
+    function renderRankings() {
+        const sortedList = [...allContestantsData].sort((a, b) => {
+            let scoreA = a.finalScore > 0 ? a.finalScore : ((a.judgeAvgScore || 0) * 0.6 + (a.studentAvgScore || 0) * 0.4);
+            let scoreB = b.finalScore > 0 ? b.finalScore : ((b.judgeAvgScore || 0) * 0.6 + (b.studentAvgScore || 0) * 0.4);
+            return scoreB - scoreA;
+        });
+
+        const fullBox = document.getElementById('full-rank-container');
+        if(sortedList.length === 0) {
+            fullBox.innerHTML = '<div style="text-align: center; color: #8E8E93; font-size: 13px; padding: 30px 0;">暂无选手数据</div>';
+        } else {
+            fullBox.innerHTML = sortedList.map((c, i) => {
+                let displayScore = c.finalScore > 0 ? c.finalScore.toFixed(2) : ((c.judgeAvgScore || 0) * 0.6 + (c.studentAvgScore || 0) * 0.4).toFixed(2);
+                let scoreColor = c.finalScore > 0 ? "#FF9F0A" : "#8E8E93";
+                return `<div class="rank-item"><div class="rank-num">${i+1}</div><div class="rank-name"><span>${c.name}</span> <span style="font-size:11px; color:#8E8E93; font-weight:normal;">${c.className||''}</span></div><div class="rank-score" style="color: ${scoreColor};">${displayScore}</div></div>`;
+            }).join('');
+        }
+    }
+
+    function updateDisplay() { domVoteScore.innerText = myScore === "" ? "--" : myScore; }
+
+    function press(n) {
+        if(myScore === "" && n === "0") return;
+        if(myScore === "100") return;
+        if(myScore.length >= 2 && myScore !== "10") return;
+
+        let newScore = myScore + n;
+        if(parseInt(newScore) > sysScale) return showToast(`本场最高为 ${sysScale} 分`);
+        myScore = newScore; updateDisplay();
+    }
+
+    function directScore(n, el) {
+        myScore = n.toString(); updateDisplay();
+        document.querySelectorAll('.circle-btn').forEach(b => b.classList.remove('selected'));
+        document.querySelector('.circle-btn-wide').classList.remove('selected');
+        el.classList.add('selected');
+    }
+
+    async function doSubmitVote() {
+        if (isEmergencyLocked) return showToast("🚨 通道已锁死");
+        if (!currentId) return showToast("暂无选手演唱");
+        if (myScore === "") return showToast("请输入分数");
+
+        const payload = { contestantId: currentId, judgeName: deviceId, score: parseInt(myScore), judgeType: 'STUDENT', deviceId: deviceId };
+        domSubmitBtn.innerText = "提交中..."; domSubmitBtn.disabled = true;
+        try {
+            const res = await fetch(host + '/api/scores/submit', {
+                method: 'POST',
+                headers: getAuthHeaders(true),
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+                showToast(await res.text());
+                domSubmitBtn.innerText = "提交分数"; domSubmitBtn.disabled = false;
+                return;
+            }
+
+            showToast("提交成功！感谢参与！");
+            localStorage.setItem('voted_' + currentId, 'true');
+            domSubmitBtn.innerText = "✅ 已完成打分"; domSubmitBtn.style.background = "#32D74B";
+
+            updateVotingMask(true, true); // 触发完成遮罩
+
+            domBottomNav.style.transform = 'translateY(0)';
+            silentPollSystemData();
+            setTimeout(() => { switchTab('home'); }, 1200);
+        } catch(e) { showToast("网络异常，请重试"); domSubmitBtn.innerText = "提交分数"; domSubmitBtn.disabled = false; }
+    }
+
+    let ws = null; let wsHeartbeat = null;
+    function connectWS() {
+        ws = new WebSocket(wsUrl);
+        ws.onopen = () => {
+            document.getElementById('net-indicator').style.background = '#32D74B'; document.getElementById('net-indicator').style.boxShadow = '0 0 8px #32D74B'; document.getElementById('net-text').innerText = '连接成功';
+            if(wsHeartbeat) clearInterval(wsHeartbeat);
+            wsHeartbeat = setInterval(() => { if(ws.readyState === WebSocket.OPEN) { ws.send(JSON.stringify({ type: 'PING', role: 'AUDIENCE', deviceId: deviceId })); } }, 5000);
+        };
+        ws.onmessage = async (e) => {
+            try {
+                const cmd = JSON.parse(e.data);
+                if (cmd.type === 'SHOW_SINGER') {
+                    // 兼容数组推送
+                    let sData = null;
+                    if (cmd.singers && Array.isArray(cmd.singers)) sData = cmd.singers[0];
+                    else if (cmd.data) sData = Array.isArray(cmd.data) ? cmd.data[0] : cmd.data;
+
+                    if (sData) {
+                        currentId = sData.id;
+                        document.getElementById('home-name').innerText = sData.name || "--";
+                        document.getElementById('home-song').innerText = sData.songName ? `《${sData.songName}》` : "《未知曲目》";
+                        document.getElementById('home-class').innerText = sData.className || '';
+                        document.getElementById('vote-singer-name').innerText = sData.name || "--";
+
+                        myScore = ""; updateDisplay();
+                        document.querySelectorAll('.circle-btn').forEach(b => b.classList.remove('selected'));
+                        document.querySelector('.circle-btn-wide').classList.remove('selected');
+
+                        const hasVoted = localStorage.getItem('voted_' + currentId) === 'true';
+                        updateVotingMask(isForceVoting, hasVoted);
+
+                        if(hasVoted) {
+                            domSubmitBtn.innerText = "✅ 已完成打分"; domSubmitBtn.style.background = "#32D74B"; domSubmitBtn.disabled = true;
+                        } else {
+                            domSubmitBtn.disabled = false; domSubmitBtn.innerText = "提交分数"; domSubmitBtn.style.background = "linear-gradient(135deg, #0A84FF, #32D74B)";
+                        }
+                    }
+
+                    if (!isForceVoting) switchTab('home');
+                }
+                else if (cmd.type === 'FORCE_VOTE_START' || cmd.type === 'START_COUNTDOWN') {
+                    isForceVoting = true;
+                    const hasVoted = localStorage.getItem('voted_' + currentId) === 'true';
+                    updateVotingMask(true, hasVoted);
+
+                    switchTab('vote');
+                    if(!hasVoted) domBottomNav.style.transform = 'translateY(100%)';
+                }
+                else if (cmd.type === 'FORCE_VOTE_STOP') {
+                    isForceVoting = false;
+                    updateVotingMask(false, localStorage.getItem('voted_' + currentId) === 'true');
+                    domBottomNav.style.transform = 'translateY(0)';
+                    silentPollSystemData();
+                }
+                else if (cmd.type === 'PUBLISH_SCORE') { silentPollSystemData(); }
+                else if (cmd.type === 'SCALE_CHANGED') { sysScale = cmd.scale; updateScaleUI(); showToast(`赛制已切换为 ${sysScale} 分制`); }
+                else if (cmd.type === 'EMERGENCY_LOCK') {
+                    if (cmd.target === 'ALL' || cmd.target === 'AUDIENCE') {
+                        isEmergencyLocked = cmd.isLocked;
+                        document.getElementById('emergency-lock-overlay').style.display = isEmergencyLocked ? 'flex' : 'none';
+                    }
+                }
+            } catch (err) {}
+        };
+        ws.onclose = () => {
+            document.getElementById('net-indicator').style.background = '#FF453A'; document.getElementById('net-indicator').style.boxShadow = '0 0 8px #FF453A'; document.getElementById('net-text').innerText = '断线重连中';
+            if(wsHeartbeat) clearInterval(wsHeartbeat); setTimeout(connectWS, 3000);
+        };
+    }
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            silentPollSystemData();
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                if(wsHeartbeat) clearInterval(wsHeartbeat);
+                connectWS();
+            }
+        }
+    });
+
+</script>
+</body>
+</html>

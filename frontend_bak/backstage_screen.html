@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>星裁系统 · 候场区实时调度大屏</title>
+    <script src="https://cdn.staticfile.net/echarts/5.5.0/echarts.min.js"></script>
+    <style>
+        :root { --dark: #0f172a; --card: #1e293b; --primary: #3b82f6; --success: #10b981; --warning: #f1c40f; --danger: #ef4444; --text: #f8fafc; --text-muted: #94a3b8; }
+        body { margin: 0; padding: 20px; background-color: var(--dark); color: var(--text); font-family: -apple-system, sans-serif; height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* 顶部 Header */
+        .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 2px solid #334155; margin-bottom: 20px; }
+        .header-title { font-size: 32px; font-weight: 900; letter-spacing: 4px; text-shadow: 0 0 20px rgba(59,130,246,0.8); }
+        .header-left, .header-right { display: flex; align-items: center; gap: 15px; width: 250px; }
+        .header-right { justify-content: flex-end; }
+
+        button { padding: 10px 20px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; color: white; display: flex; align-items: center; justify-content: center; gap: 5px; }
+        button:active { transform: scale(0.95); }
+        .btn-sos { background: linear-gradient(135deg, #ef4444, #b91c1c); box-shadow: 0 0 15px rgba(239,68,68,0.5); animation: pulseSOS 2s infinite; }
+        .btn-refresh { background: #334155; border: 1px solid #475569; }
+        .btn-cancel { background: transparent; border: 1px solid #475569; color: #cbd5e1; }
+        .btn-cancel:hover { background: rgba(255,255,255,0.1); }
+
+        .net-status { display: flex; align-items: center; gap: 8px; font-size: 14px; background: rgba(0,0,0,0.5); padding: 8px 15px; border-radius: 20px; border: 1px solid #334155; }
+        .net-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--success); box-shadow: 0 0 10px var(--success); }
+        .net-dot.offline { background: var(--danger); box-shadow: 0 0 10px var(--danger); }
+
+        @keyframes pulseSOS { 0%, 100% { box-shadow: 0 0 15px rgba(239,68,68,0.5); } 50% { box-shadow: 0 0 30px rgba(239,68,68,1); } }
+
+        /* 四宫格布局 */
+        .grid-layout { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 20px; flex: 1; min-height: 0; }
+        .card { background: var(--card); border: 1px solid #334155; border-radius: 16px; padding: 25px; display: flex; flex-direction: column; box-shadow: inset 0 0 20px rgba(0,0,0,0.5); position: relative; overflow: hidden;}
+        .card-title { font-size: 20px; color: var(--text-muted); margin: 0 0 15px 0; border-left: 4px solid var(--primary); padding-left: 10px; flex-shrink:0;}
+
+        /* 左上：调度中枢 */
+        .stage-status-box { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: center; overflow-y:auto; padding-right:10px;}
+        .status-badge { display: inline-block; padding: 10px 25px; border-radius: 50px; font-size: 22px; font-weight: bold; margin: 0 auto 20px auto; letter-spacing: 2px; border: 2px solid transparent; transition: transform 0.3s; flex-shrink:0;}
+        .status-singing { background: rgba(16,185,129,0.1); color: var(--success); border-color: var(--success); box-shadow: 0 0 20px rgba(16,185,129,0.3); }
+        .status-waiting { background: rgba(241,196,15,0.1); color: var(--warning); border-color: var(--warning); box-shadow: 0 0 20px rgba(241,196,15,0.3); }
+
+        .current-singer-group { display: flex; flex-direction: column; gap: 15px;}
+        .singer-item { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; align-items: center; gap: 5px;}
+        .current-singer-name { font-size: 45px; font-weight: 900; color: white; text-shadow: 0 5px 15px rgba(0,0,0,0.5); line-height: 1.1;}
+        .current-singer-song { font-size: 22px; color: #cbd5e1; font-style: italic;}
+        .current-singer-mic { font-size: 16px; color: var(--primary); background: rgba(59,130,246,0.15); padding: 4px 12px; border-radius: 20px; font-weight: bold; margin-top: 5px;}
+
+        /* 右上：候场队列 (替换了原来的提词器) */
+        .queue-box { flex: 1; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding-right: 5px;}
+        .queue-item { background: rgba(0,0,0,0.3); border: 1px dashed #475569; border-radius: 12px; padding: 15px 20px; display: flex; align-items: center; justify-content: space-between; transition: 0.3s;}
+        .queue-item.active { background: rgba(241,196,15,0.1); border-color: var(--warning); border-style: solid;}
+        .q-idx { font-size: 24px; font-weight: 900; color: var(--warning); width: 40px; text-align: center; flex-shrink: 0;}
+        .q-info { flex: 1; display: flex; flex-direction: column; margin-left: 15px; overflow: hidden;}
+        .q-name { font-size: 28px; font-weight: bold; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;}
+        .q-song { font-size: 18px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+
+        /* 战队模式下的特殊候场 */
+        .queue-item-team { background: rgba(239,68,68,0.1); border: 1px solid var(--danger); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 10px;}
+        .qt-label { font-size: 24px; font-weight: bold; color: var(--danger); letter-spacing: 5px;}
+        .qt-name { font-size: 45px; font-weight: 900; color: white;}
+        .qt-members { font-size: 20px; color: #cbd5e1; text-align: center; line-height: 1.5;}
+
+        /* 左下：提词器 (移位) */
+        .score-board { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: 0.3s; }
+        .score-name { font-size: 45px; color: var(--text-muted); margin: 0; text-align: center; padding: 0 10px; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+        .score-value { font-size: 130px; font-weight: 900; color: var(--primary); text-shadow: 0 0 40px rgba(59,130,246,0.6); margin: -10px 0; line-height: 1; }
+        .score-rank { font-size: 30px; color: var(--success); font-weight: bold; background: rgba(16,185,129,0.15); padding: 10px 30px; border-radius: 50px; border: 1px solid var(--success); margin-top: 15px; }
+
+        .flash-active { animation: flashAlert 1.5s ease-in-out; }
+        @keyframes flashAlert { 0%, 100% { box-shadow: inset 0 0 20px rgba(0,0,0,0.5); border-color: #334155; } 25%, 75% { box-shadow: inset 0 0 80px rgba(239,68,68,0.8), 0 0 50px rgba(239,68,68,0.5); border-color: var(--danger); transform: scale(1.02); } }
+
+        /* 右下：环形图表 */
+        .chart-container { flex: 1; width: 100%; height: 100%; }
+
+        /* 紧急报错模态框 */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px); z-index: 100000; display: none; justify-content: center; align-items: center; opacity: 0; transition: 0.3s; }
+        .modal-overlay.active { display: flex; opacity: 1; }
+        .modal-box { background: var(--card); border: 2px solid var(--danger); box-shadow: 0 0 50px rgba(239, 68, 68, 0.4); border-radius: 20px; padding: 40px; max-width: 500px; text-align: center; transform: scale(0.9); transition: 0.3s; }
+        .modal-overlay.active .modal-box { transform: scale(1); }
+
+        #toast-container { position: fixed; top: 100px; left: 50%; transform: translateX(-50%); z-index: 99999; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+        .toast { background: rgba(0,0,0,0.9); color: white; padding: 15px 30px; border-radius: 12px; font-size: 20px; font-weight: bold; border: 1px solid #475569; opacity: 0; transform: translateY(-20px); transition: 0.3s; }
+        .toast.show { opacity: 1; transform: translateY(0); }
+    </style>
+</head>
+<body>
+
+<div id="toast-container"></div>
+
+<div id="sos-modal" class="modal-overlay">
+    <div class="modal-box">
+        <div style="font-size: 60px; margin-bottom: 10px;">🚨</div>
+        <h2 style="color: var(--danger); margin-top: 0; font-size: 28px;">确认发送紧急警报？</h2>
+        <p style="color: var(--text-muted); font-size: 16px; line-height: 1.5; margin-bottom: 30px;">点击确认后，导播台将立刻弹出红色最高级警报！</p>
+        <div style="display: flex; justify-content: center; gap: 20px;">
+            <button class="btn-cancel" style="padding: 12px 30px;" onclick="closeSOSModal()">取消发送</button>
+            <button class="btn-sos" style="animation: none; padding: 12px 30px;" onclick="confirmSOS()">确认报警</button>
+        </div>
+    </div>
+</div>
+
+<div class="header">
+    <div class="header-left"><button class="btn-sos" onclick="openSOSModal()">🚨 紧急报错</button></div>
+    <div class="header-title">幻境引擎 - 候场区实时调度大屏</div>
+    <div class="header-right">
+        <button class="btn-refresh" onclick="location.reload()">🔄 刷新</button>
+        <div class="net-status"><div class="net-dot" id="net-dot"></div><span id="net-text">在线</span></div>
+    </div>
+</div>
+
+<div class="grid-layout">
+    <div class="card">
+        <h2 class="card-title">🎭 舞台调度中枢 (On Stage)</h2>
+        <div class="stage-status-box">
+            <div id="stage-badge" class="status-badge status-waiting">🟡 等待登台</div>
+            <div class="current-singer-group" id="stage-current-group">
+                <div style="font-size: 40px; color: #475569; margin: auto;">暂无表演</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" id="queue-card">
+        <h2 class="card-title">📢 候场队列矩阵 (Standby)</h2>
+        <div class="queue-box" id="queue-container">
+            <div style="font-size: 30px; color: #475569; text-align: center; margin: auto;">暂无候场指派</div>
+        </div>
+    </div>
+
+    <div class="card" id="score-card">
+        <h2 class="card-title">📢 最新得分提词器 (Result)</h2>
+        <div class="score-board">
+            <p class="score-name" id="latest-name">等待出分</p>
+            <div class="score-value" id="latest-score">--.--</div>
+            <div class="score-rank" id="latest-rank" style="opacity: 0;">暂列 第 - 名</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 class="card-title">📊 最新战报明细 (专业 / 大众)</h2>
+        <div id="detail-chart" class="chart-container"></div>
+    </div>
+</div>
+
+<script>
+    const currentHost = window.location.host;
+    const isHttps = window.location.protocol === 'https:';
+    const wsUrl = (isHttps ? 'wss://' : 'ws://') + currentHost + '/ws/screen';
+    const cmdApi = (isHttps ? 'https://' : 'http://') + currentHost + '/api/command/send';
+
+    let allContestants = [];
+    let globalMicsMap = {}; // 存储当前大屏接收到的麦克风分配： key 为 pureName，value 为 micId
+    let detailChart;
+
+    function updateNetUI(isOnline) {
+        document.getElementById('net-dot').className = isOnline ? 'net-dot' : 'net-dot offline';
+        document.getElementById('net-text').innerText = isOnline ? '在线' : '离线重连中';
+    }
+    window.addEventListener('online', () => updateNetUI(true));
+    window.addEventListener('offline', () => updateNetUI(false));
+
+    function extractPureName(n) {
+        if (!n) return '';
+        let p = n.replace(/^No\.\s*\d+\s*-?\s*/i, '').trim();
+        return p.includes(' (') ? p.split(' (')[0].trim() : p;
+    }
+
+    let ws; let reconnectTimer;
+    function connectWS() {
+        ws = new WebSocket(wsUrl);
+        ws.onopen = () => { updateNetUI(true); if(reconnectTimer) clearInterval(reconnectTimer); };
+        ws.onclose = () => { updateNetUI(false); reconnectTimer = setTimeout(connectWS, 3000); };
+        ws.onerror = () => { ws.close(); };
+        ws.onmessage = (e) => {
+            const cmd = JSON.parse(e.data);
+
+            if (cmd.type === 'BACKSTAGE_SYNC') {
+                allContestants = cmd.list; showToast("已接收导播全量数据同步！");
+            }
+
+            // 🚨 拦截星守系统的麦克风状态同步
+            else if (cmd.type === 'SYNC_MICS' && cmd.mics) {
+                globalMicsMap = {};
+                cmd.mics.forEach(m => {
+                    if (m.holder) globalMicsMap[extractPureName(m.holder)] = m.id;
+                });
+                // 重新渲染当前台上人员，以显示麦克风变化
+                const badge = document.getElementById('stage-badge');
+                if (badge.innerText.includes('🟢')) {
+                    // 仅当目前有人在台上时更新一下 UI (通过触发一次重绘)
+                    const names = Array.from(document.querySelectorAll('.current-singer-name')).map(el => el.innerText);
+                    if(names.length > 0) {
+                        names.forEach((name, i) => {
+                            const micEl = document.getElementById(`mic-badge-${i}`);
+                            if(micEl) {
+                                const micId = globalMicsMap[name];
+                                micEl.innerText = micId ? `🎤 分配频道: ${micId}` : '🎤 麦克风暂未分配';
+                                micEl.style.color = micId ? 'white' : 'var(--primary)';
+                                micEl.style.background = micId ? 'var(--primary)' : 'rgba(59,130,246,0.15)';
+                            }
+                        });
+                    }
+                }
+            }
+
+            else if (cmd.type === 'SHOW_SINGER') {
+                document.getElementById('stage-badge').className = 'status-badge status-singing';
+                document.getElementById('stage-badge').innerText = '🟢 正在演唱/打分';
+
+                // 解析单人或多人的数组
+                let singers = [];
+                if (cmd.singers && Array.isArray(cmd.singers)) singers = cmd.singers;
+                else if (cmd.data) singers = Array.isArray(cmd.data) ? cmd.data : [cmd.data];
+
+                const groupContainer = document.getElementById('stage-current-group');
+                let html = '';
+                if (singers.length === 0) {
+                    html = '<div style="font-size: 40px; color: #475569; margin: auto;">暂无表演</div>';
+                } else {
+                    // 判断是否为战队模式（所有选手 groupName 相同）
+                    let teamName = null;
+                    if (singers.length > 1) {
+                        const firstGroup = singers[0].groupName;
+                        if (firstGroup && singers.every(s => s.groupName === firstGroup)) {
+                            teamName = firstGroup;
+                        }
+                    }
+
+                    if (teamName) {
+                        html += `<div style="font-size:20px; color:var(--warning); text-align:center; font-weight:bold; letter-spacing:2px; margin-bottom:-5px;">⚔️ 战队模式</div>`;
+                    }
+
+                    singers.forEach((s, idx) => {
+                        let micId = globalMicsMap[s.name];
+                        let micStr = micId ? `🎤 分配频道: ${micId}` : '🎤 麦克风暂未分配';
+                        let micBg = micId ? 'background: var(--primary); color: white;' : '';
+
+                        html += `
+                        <div class="singer-item">
+                            <div class="current-singer-name">${s.name}</div>
+                            <div class="current-singer-song">${s.songName ? '《'+s.songName+'》' : '《未知曲目》'}</div>
+                            <div class="current-singer-mic" id="mic-badge-${idx}" style="${micBg}">${micStr}</div>
+                        </div>`;
+                    });
+                }
+                groupContainer.innerHTML = html;
+            }
+
+            else if (cmd.type === 'SET_NEXT_SINGER') {
+                const qContainer = document.getElementById('queue-container');
+                let singers = [];
+                if (cmd.singers && Array.isArray(cmd.singers)) singers = cmd.singers;
+
+                let html = '';
+                if (singers.length === 0) {
+                    html = '<div style="font-size: 30px; color: #475569; text-align: center; margin: auto;">暂无候场指派</div>';
+                } else {
+                    // 判断战队模式：如果传入的数组全体具有相同的 groupName 且长度 > 1
+                    let isTeam = false; let teamName = '';
+                    if (singers.length > 1) {
+                        teamName = singers[0].groupName;
+                        if (teamName && singers.every(s => s.groupName === teamName)) isTeam = true;
+                    }
+
+                    if (isTeam) {
+                        const membersStr = singers.map(s => s.name).join(' 、 ');
+                        html = `
+                        <div class="queue-item-team">
+                            <div class="qt-label">⚔️ 候场战队</div>
+                            <div class="qt-name">${teamName}</div>
+                            <div class="qt-members">成员：${membersStr}</div>
+                        </div>`;
+                    } else {
+                        singers.forEach((s, idx) => {
+                            html += `
+                            <div class="queue-item ${idx===0 ? 'active' : ''}">
+                                <div class="q-idx">${idx+1}</div>
+                                <div class="q-info">
+                                    <div class="q-name">${s.name}</div>
+                                    <div class="q-song">${s.songName ? '《'+s.songName+'》' : '无曲目'}</div>
+                                </div>
+                            </div>`;
+                        });
+                    }
+                }
+                qContainer.innerHTML = html;
+                showToast("📢 导播已更新候场矩阵");
+            }
+
+            else if (cmd.type === 'PUBLISH_SCORE') {
+                document.getElementById('stage-badge').className = 'status-badge status-waiting';
+                document.getElementById('stage-badge').innerText = '🔴 计分完毕 (等待调度)';
+
+                // 兼容老版本和新版本的数据结构
+                let ranks = cmd.ranks || [];
+                if (ranks.length === 0 && cmd.data) ranks = [{ data: cmd.data, rank: cmd.rank }];
+
+                if (ranks.length > 0) {
+                    // 候场区大屏只挑一个代表性的展示（通常是第一位，或者如果有战队成绩会被下面的 TEAM_SCORE 拦截）
+                    const target = ranks[0];
+                    const c = target.data;
+                    document.getElementById('latest-name').innerText = c.name;
+                    document.getElementById('latest-score').innerText = c.finalScore.toFixed(2);
+                    document.getElementById('latest-rank').innerText = `暂列 第 ${target.rank} 名`;
+                    document.getElementById('latest-rank').style.opacity = 1;
+
+                    updateDetailChart(c.judgeAvgScore || 0, c.studentAvgScore || 0);
+
+                    const card = document.getElementById('score-card');
+                    card.classList.remove('flash-active'); void card.offsetWidth; card.classList.add('flash-active');
+                }
+            }
+
+            else if (cmd.type === 'PUBLISH_TEAM_SCORE') {
+                document.getElementById('stage-badge').className = 'status-badge status-waiting';
+                document.getElementById('stage-badge').innerText = '🔴 战队出分完毕';
+
+                document.getElementById('latest-name').innerText = cmd.teamName + " 战队";
+                document.getElementById('latest-score').innerText = parseFloat(cmd.teamTotalScore).toFixed(2);
+                document.getElementById('latest-rank').innerText = `🏆 大满贯荣耀`;
+                document.getElementById('latest-rank').style.opacity = 1;
+
+                // 战队总分没有明确的均分，图表重置或隐藏
+                updateDetailChart(0, 0);
+
+                const card = document.getElementById('score-card');
+                card.classList.remove('flash-active'); void card.offsetWidth; card.classList.add('flash-active');
+            }
+        };
+    }
+
+    function initECharts() {
+        detailChart = echarts.init(document.getElementById('detail-chart'));
+
+        detailChart.setOption({
+            backgroundColor: 'transparent', tooltip: { show: false },
+            series: [
+                { name: '专业分', type: 'pie', radius: ['65%', '85%'], center: ['25%', '50%'], hoverAnimation: false, label: { show: true, position: 'center', formatter: '{c}分\n{b}', color: '#fff', fontSize: 24, fontWeight: 'bold', lineHeight: 35 }, labelLine: { show: false }, data: [{ value: 0, name: '专业均分', itemStyle: { color: '#3b82f6', shadowBlur: 20, shadowColor: '#3b82f6' } }, { value: 100, name: '', itemStyle: { color: '#1e293b' } }] },
+                { name: '大众分', type: 'pie', radius: ['65%', '85%'], center: ['75%', '50%'], hoverAnimation: false, label: { show: true, position: 'center', formatter: '{c}分\n{b}', color: '#fff', fontSize: 24, fontWeight: 'bold', lineHeight: 35 }, labelLine: { show: false }, data: [{ value: 0, name: '大众均分', itemStyle: { color: '#f59e0b', shadowBlur: 20, shadowColor: '#f59e0b' } }, { value: 100, name: '', itemStyle: { color: '#1e293b' } }] }
+            ]
+        });
+
+        window.addEventListener('resize', () => { detailChart.resize(); });
+    }
+
+    function updateDetailChart(judgeScore, studentScore) {
+        let scale = 100; if (judgeScore <= 10 && studentScore <= 10 && (judgeScore > 0 || studentScore > 0)) scale = 10;
+        detailChart.setOption({ series: [{ data: [{ value: judgeScore.toFixed(2), name: '专业均分', itemStyle: { color: '#3b82f6', shadowBlur: 20, shadowColor: '#3b82f6' } }, { value: Math.max(0, scale - judgeScore), name: '', itemStyle: { color: '#1e293b' } }] }, { data: [{ value: studentScore.toFixed(2), name: '大众均分', itemStyle: { color: '#f59e0b', shadowBlur: 20, shadowColor: '#f59e0b' } }, { value: Math.max(0, scale - studentScore), name: '', itemStyle: { color: '#1e293b' } }] }] });
+    }
+
+    function openSOSModal() { document.getElementById('sos-modal').classList.add('active'); }
+    function closeSOSModal() { document.getElementById('sos-modal').classList.remove('active'); }
+    function confirmSOS() { fetch(cmdApi, { method: 'POST', body: JSON.stringify({ type: 'BACKSTAGE_ERROR' }) }); closeSOSModal(); showToast("🚨 警报发射成功！导播台已接收！"); }
+    function showToast(msg) { const c = document.getElementById('toast-container'); const t = document.createElement('div'); t.className = 'toast'; t.innerText = msg; c.appendChild(t); requestAnimationFrame(() => t.classList.add('show')); setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 3000); }
+
+    window.onload = () => { initECharts(); connectWS(); };
+</script>
+</body>
+</html>

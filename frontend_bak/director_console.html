@@ -1,0 +1,1391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>星守系统 · 导播总控枢纽</title>
+  <script src="lib/vue.global.js"></script>
+  <script src="lib/tailwindcss.js"></script>
+  <style>
+    :root { --glass-bg: rgba(20, 20, 25, 0.65); --glass-border: rgba(255, 255, 255, 0.1); --theme-blue: #0A84FF; }
+    body { margin: 0; background-color: #000; background-image: radial-gradient(circle at 50% 0%, #151a2e 0%, #000000 80%); color: #fff; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; height: 100vh; overflow: hidden; -webkit-font-smoothing: antialiased; }
+    .glass-panel { background: var(--glass-bg); backdrop-filter: blur(40px) saturate(150%); -webkit-backdrop-filter: blur(40px) saturate(150%); border: 1px solid var(--glass-border); border-radius: 20px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4); }
+    ::-webkit-scrollbar { width: 4px; height: 4px; background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+    .btn-press { transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; } .btn-press:active { transform: scale(0.95); }
+    .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; } .fade-enter-from, .fade-leave-to { opacity: 0; transform: translateY(5px); }
+    .list-enter-active, .list-leave-active { transition: all 0.3s ease; } .list-enter-from { opacity: 0; transform: translateY(10px); }
+    .active-tab { color: #fff; font-weight: bold; position: relative; }
+    .active-tab::after { content: ''; position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 20px; height: 3px; background: var(--theme-blue); border-radius: 3px; box-shadow: 0 0 10px var(--theme-blue); }
+    .drag-over { border: 2px dashed var(--theme-blue) !important; background: rgba(10,132,255,0.1) !important; transform: scale(1.02); }
+    .modal-enter-active, .modal-leave-active { transition: all 0.2s ease; } .modal-enter-from, .modal-leave-to { opacity: 0; } .modal-enter-from .modal-box, .modal-leave-to .modal-box { transform: scale(0.95); }
+    .pulse-red { animation: pulseRed 2s infinite; }
+    @keyframes pulseRed { 0% { box-shadow: 0 0 0 0 rgba(255,69,58,0.4); } 70% { box-shadow: 0 0 0 15px rgba(255,69,58,0); } 100% { box-shadow: 0 0 0 0 rgba(255,69,58,0); } }
+    .toggle-switch { position: relative; display: inline-block; width: 42px; height: 24px; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255,255,255,0.2); transition: .3s; border-radius: 24px; }
+    .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    .toggle-switch input:checked + .toggle-slider { background-color: var(--theme-blue); }
+    .toggle-switch input:checked + .toggle-slider:before { transform: translateX(18px); }
+    .checkbox-glow:checked + div { background-color: rgba(239, 68, 68, 0.2); border-color: #ef4444; color: #ef4444; box-shadow: 0 0 10px rgba(239,68,68,0.4); }
+    .toast { position: fixed; top: 40px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.95); color: black; padding: 12px 24px; border-radius: 30px; font-size: 14px; font-weight: bold; z-index: 9999999; box-shadow: 0 10px 20px rgba(0,0,0,0.2); pointer-events: none;}
+  </style>
+</head>
+<body class="flex flex-col box-border h-screen p-4 gap-4">
+
+<div id="app" class="w-full h-full relative" v-cloak>
+
+  <transition name="fade">
+    <div v-if="!isLogged" class="absolute inset-0 z-[1000] bg-[#0a0a0c] flex flex-col items-center justify-center p-6">
+      <div class="w-24 h-24 bg-orange-600/20 rounded-3xl flex items-center justify-center mb-6 border border-orange-500/30 text-5xl shadow-[0_0_40px_rgba(249,115,22,0.2)]">🛡️</div>
+      <h1 class="text-3xl font-bold mb-2 tracking-widest text-orange-400">导播总控台</h1>
+      <p class="text-white/40 text-sm mb-10 text-center max-w-md">当前系统已开启 JWT 内核级防护<br>请输入最高权限密码以获取云端授权令牌</p>
+
+      <div class="w-full max-w-sm space-y-4">
+        <input v-model="adminPwd" @keyup.enter="doLogin" type="password" placeholder="请输入导播口令..." class="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-white placeholder-white/30 focus:outline-none focus:border-orange-500 text-lg text-center tracking-widest transition-colors shadow-inner">
+        <button @click="doLogin" :disabled="isLoggingIn" class="btn-press w-full bg-orange-600 hover:bg-orange-500 transition-colors text-white rounded-xl py-4 font-bold text-lg shadow-[0_5px_20px_rgba(249,115,22,0.4)] mt-4 flex items-center justify-center gap-2 disabled:opacity-50">
+          <span v-if="isLoggingIn" class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+          {{ isLoggingIn ? '安全核验中...' : '签发授权并接入' }}
+        </button>
+      </div>
+    </div>
+  </transition>
+
+  <div v-if="isLogged" class="w-full h-full flex flex-col relative">
+    <nav class="w-full glass-panel px-8 py-4 flex items-center justify-center relative z-50 flex-shrink-0 mb-2">
+      <div class="flex gap-10">
+        <button @click="activeTab='dash'" class="text-white/60 hover:text-white text-[15px] btn-press" :class="{'active-tab': activeTab==='dash'}">首页总览</button>
+        <button @click="activeTab='ctrl'" class="text-white/60 hover:text-white text-[15px] btn-press" :class="{'active-tab': activeTab==='ctrl'}">任务与指挥</button>
+        <button @click="activeTab='device'" class="text-white/60 hover:text-white text-[15px] btn-press" :class="{'active-tab': activeTab==='device'}">设备调度</button>
+        <button @click="activeTab='staff'" class="text-white/60 hover:text-white text-[15px] btn-press" :class="{'active-tab': activeTab==='staff'}">建制管理</button>
+        <button @click="activeTab='log'" class="text-white/60 hover:text-white text-[15px] btn-press" :class="{'active-tab': activeTab==='log'}">日志中心</button>
+      </div>
+      <div class="absolute right-8 flex items-center gap-4 border-l border-white/10 pl-6">
+        <div class="flex items-center gap-2 text-xs font-bold text-white/50">
+          <span class="w-2.5 h-2.5 rounded-full" :class="wsConnected ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-red-500'"></span>
+          {{ wsConnected ? '系统在线' : '重连中...' }}
+        </div>
+        <button @click="doLogout" class="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-1 rounded hover:bg-red-500/30 btn-press">退出授权</button>
+      </div>
+    </nav>
+
+    <div class="flex-1 overflow-hidden relative">
+      <transition name="fade" mode="out-in">
+
+        <div v-if="activeTab === 'dash'" class="w-full h-full flex gap-4 absolute inset-0">
+          <div class="glass-panel w-64 flex-shrink-0 flex flex-col">
+            <div class="p-4 flex-1 flex flex-col">
+              <h2 class="text-white/80 font-bold text-sm tracking-widest uppercase mb-4">🌍 战区阵地</h2>
+              <div class="flex-1 overflow-y-auto space-y-2">
+                <div @click="dashActiveGroup = 'global'" class="flex items-center justify-between p-3 rounded-xl border transition-colors btn-press mb-2" :class="dashActiveGroup === 'global' ? 'bg-blue-600/20 border-blue-500/50 text-blue-400' : 'bg-white/5 border-white/10 text-white/90 hover:bg-white/10'">
+                  <span class="text-sm font-bold">📢 全域广播</span>
+                </div>
+                <div class="w-full h-[1px] bg-white/10 my-3"></div>
+
+                <div v-for="(group, index) in groups" :key="group.id" draggable="true" @dragstart="dragStart($event, index)" @dragover.prevent="dragOver($event)" @dragleave="dragLeave($event)" @drop="drop($event, index)"
+                     @click="dashActiveGroup = group.name"
+                     class="flex items-center justify-between p-3 rounded-xl border cursor-move hover:bg-white/10 transition-colors btn-press"
+                     :class="dashActiveGroup === group.name ? 'bg-blue-600/20 border-blue-500/50 text-blue-400' : 'bg-white/5 border-white/5'">
+                  <span class="font-medium text-[14px] text-white/90" :class="group.isSystem ? 'text-orange-300' : ''">≡ {{ group.name }}</span>
+                  <span class="text-xs font-mono" :class="getGroupOnlineCountObj(group.name).online > 0 ? 'text-green-400' : 'text-white/40'">{{ getGroupOnlineStats(group.name) }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="p-4 border-t border-white/10 bg-red-500/10 rounded-b-20">
+              <button @click="toggleSosChannel" class="w-full py-3 text-white rounded-xl font-bold btn-press flex items-center justify-center gap-2 transition-all" :class="isSosMode ? 'bg-black border border-red-500 pulse-red' : 'bg-red-600 hover:bg-red-500'">
+                <span>🚨</span> {{ isSosMode ? '退出 SOS 应急模式' : 'SOS 应急频道' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="flex-1 glass-panel flex flex-col relative overflow-hidden" :class="{'border-red-500 shadow-[0_0_30px_rgba(255,69,58,0.2)]': isSosMode}">
+            <div v-if="isSosMode" class="bg-red-600 text-white text-center py-1.5 text-xs font-bold flex justify-between px-4 items-center">
+              <span>⚠️ 当前处于 SOS 紧急频道，所有手机端将强制震动弹窗！</span>
+              <button @click="toggleSosChannel" class="bg-black/30 px-2 py-0.5 rounded btn-press">关闭</button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-5 space-y-4" ref="chatBox">
+              <transition-group name="list">
+                <div v-for="msg in dashFilteredMessages" :key="msg.id" class="flex flex-col max-w-[85%]" :class="msg.isSelf ? 'ml-auto items-end' : 'items-start'">
+                  <div class="flex items-baseline gap-2 mb-1 px-1"><span class="text-[12px] font-bold" :class="msg.isSos ? 'text-red-400' : (msg.isSelf ? 'text-blue-400' : 'text-white/60')">{{ msg.sender }}</span><span class="text-[10px] text-white/30 font-mono">{{ msg.time }}</span></div>
+                  <div class="px-4 py-2.5 rounded-2xl text-[14px] leading-relaxed backdrop-blur-md border border-white/5" :class="[msg.isSos ? 'bg-red-500/20 text-red-100 border-red-500/30' : msg.isSelf ? 'bg-blue-600/80 text-white rounded-tr-sm' : 'bg-white/10 text-white/90 rounded-tl-sm']">{{ msg.content }}</div>
+
+                  <div v-if="msg.isSos && msg.isSelf" class="w-full flex justify-end mt-1.5 cursor-pointer" @dblclick="openSosDetails(msg)" title="双击查看回执详情">
+                    <div class="flex flex-wrap justify-end gap-1.5 max-w-[90%] items-center">
+                      <span class="text-[9px] text-red-300 mr-1 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>收到确认:</span>
+                      <span v-for="(ack, index) in (msg.acks || [])" :key="index" class="text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30 px-1.5 py-0.5 rounded shadow-[0_0_5px_rgba(34,197,94,0.3)]">{{ ack ? ack.slice(-2) : '' }}</span>
+                      <span v-if="(!msg.acks || msg.acks.length === 0)" class="text-[9px] text-white/30 border border-white/10 px-1.5 py-0.5 rounded border-dashed">暂无确认 (双击查阅)</span>
+                    </div>
+                  </div>
+                </div>
+              </transition-group>
+            </div>
+
+            <div class="p-3 bg-black/40 border-t border-white/10">
+              <div class="flex gap-2">
+                <button @click="atGroupModal.show = true" class="btn-press bg-white/10 border border-white/10 rounded-xl px-4 font-bold text-white/80 hover:bg-white/20 transition-colors">@</button>
+                <input v-model="inputText" @keyup.enter="sendMessage" type="text" :placeholder="isSosMode ? '输入紧急指令...' : (dashActiveGroup === 'global' ? '发送全域广播指令...' : `发送给 ${dashActiveGroup}...`)" class="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-white/30 outline-none">
+                <button @click="sendMessage" class="btn-press text-white px-6 py-2.5 rounded-xl font-bold" :class="isSosMode ? 'bg-red-600' : 'bg-blue-600'">下发</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="w-80 flex-shrink-0 flex flex-col gap-4">
+            <div class="glass-panel p-4 flex-1 flex flex-col"><h2 class="text-white/80 font-bold text-sm tracking-widest uppercase mb-3">📡 实时雷达与审计流</h2><div class="flex-1 overflow-y-auto space-y-1.5 pr-1"><div v-for="log in recentLogs" :key="log.id" class="text-[11px] bg-white/5 p-2 rounded-lg border-l-2" :class="log.level==='danger'?'border-red-500 text-red-300':'border-blue-500 text-white/60'"><span class="opacity-50 mr-1">[{{ log.time }}]</span><b class="text-white/80">{{ log.sender }}:</b> {{ log.content }}</div></div></div>
+          </div>
+        </div>
+
+        <div v-else-if="activeTab === 'ctrl'" class="w-full h-full flex gap-4 absolute inset-0">
+          <div class="glass-panel w-1/3 p-5 flex flex-col">
+            <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-3">
+              <h2 class="text-white font-bold text-lg">🛡️ 现场战力监控</h2>
+              <cyber-select v-model="ctrlFilterGroup" :options="groupOptionsWithAll" placeholder="筛选组别" class="w-32"></cyber-select>
+            </div>
+
+            <div class="flex-1 overflow-y-auto space-y-3 pr-2">
+              <div v-for="u in ctrlFilteredAndSortedUsers" :key="u.id" class="bg-black/30 border rounded-xl p-3 flex justify-between items-center transition-colors"
+                   :class="u.online ? 'border-green-500/30 shadow-[inset_4px_0_0_#22c55e]' : 'border-white/5 opacity-60 grayscale'">
+                <div class="flex flex-col">
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-white">{{ u.name }}</span>
+                    <span class="text-[9px] px-1.5 py-0.5 rounded font-bold" :class="u.level===1 ? 'bg-purple-500/20 text-purple-400' : (u.level===2 ? 'bg-orange-500/20 text-orange-400' : 'bg-blue-500/20 text-blue-400')">{{ u.level===1?'一级(导演)':(u.level===2?'二级(组长)':'三级') }}</span>
+                  </div>
+                  <span class="text-[11px] text-white/50 mt-1">{{ u.role }}</span>
+                </div>
+
+                <div class="flex gap-2" v-if="u.level !== 1">
+                  <button @click="sendSingleAction(u.locked ? 'unlock' : 'lock', u.name)" class="w-8 h-8 rounded-lg flex items-center justify-center btn-press border" :class="u.locked ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-white/5 border-white/10 text-white/50'">{{ u.locked ? '🔒' : '🔓' }}</button>
+                  <button @click="customConfirm('强制下线', `确定踢出 <b>${u.name}</b> 吗？`, true, () => { sendSingleAction('kick', u.name); })" class="w-8 h-8 rounded-lg flex items-center justify-center btn-press bg-red-500/10 border border-red-500/30 text-red-400">🛑</button>
+                </div>
+                <div v-else class="text-[10px] text-purple-400 border border-purple-500/30 px-2 py-1 rounded bg-purple-500/10">受保护</div>
+              </div>
+              <div v-if="ctrlFilteredAndSortedUsers.length === 0" class="text-center py-10 text-white/30 text-sm">暂无人员接入</div>
+            </div>
+
+            <div class="border-t border-white/10 pt-4 mt-4 flex gap-2">
+              <button @click="bulkAction('lock', ctrlFilterGroup, 'all')" class="flex-1 bg-orange-500/20 text-orange-400 border border-orange-500/30 py-2 rounded-lg font-bold text-xs btn-press">锁定当前列表</button>
+              <button @click="bulkAction('kick', ctrlFilterGroup, 'all')" class="flex-1 bg-red-500/20 text-red-400 border border-red-500/30 py-2 rounded-lg font-bold text-xs btn-press">下线当前列表</button>
+            </div>
+          </div>
+
+          <div class="glass-panel flex-1 p-5 flex flex-col relative overflow-hidden bg-gradient-to-br from-[var(--glass-bg)] to-blue-900/10">
+            <h2 class="text-blue-400 font-bold text-xl mb-4 border-b border-blue-500/20 pb-3 flex items-center gap-2"><span>🎯</span> 待办任务流控中心</h2>
+
+            <div class="bg-black/40 border border-blue-500/30 rounded-2xl p-4 mb-6 shadow-[0_0_20px_rgba(10,132,255,0.1)] relative z-20">
+              <div class="flex gap-4 mb-3">
+                <input v-model="newTask.title" placeholder="任务主标题 / 代号" class="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white outline-none focus:border-blue-500 text-sm font-bold">
+                <div class="w-56 relative z-[9999]">
+                  <cyber-select v-model="newTask.target" :options="taskTargetOptions" placeholder="精确指派目标"></cyber-select>
+                </div>
+              </div>
+              <div class="flex gap-4 items-end relative z-10">
+                <textarea v-model="newTask.content" placeholder="详细任务描述与执行标准 (支持长文本)..." class="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500 text-sm resize-none h-20"></textarea>
+
+                <div class="flex flex-col gap-2 h-20 justify-between">
+                  <label class="flex items-center gap-2 cursor-pointer btn-press text-sm text-white/70 hover:text-white transition-colors h-8">
+                    <input type="checkbox" v-model="newTask.priority" true-value="high" false-value="none" class="hidden checkbox-glow">
+                    <div class="w-5 h-5 rounded border border-white/20 bg-white/5 flex items-center justify-center transition-colors">
+                      <span v-if="newTask.priority === 'high'" class="text-xs">🔥</span>
+                    </div>
+                    高优加急
+                  </label>
+
+                  <button @click="issueTask" class="bg-blue-600 hover:bg-blue-500 text-white w-32 h-10 rounded-xl font-bold text-base btn-press shadow-[0_5px_15px_rgba(10,132,255,0.4)] transition-all flex items-center justify-center gap-2">🚀 派 发</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto pr-2 space-y-4 relative z-10">
+              <transition-group name="list">
+                <div v-for="task in activeTasks" :key="task.id" class="bg-black/50 border rounded-xl p-4 relative transition-colors group"
+                     :class="[task.status === 'completed' ? 'border-green-500/30 opacity-60' : (task.priority === 'high' ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.15)]' : 'border-white/10')]">
+
+                  <button @click="deleteTask(task.id)" class="absolute top-2 right-2 text-white/30 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all z-10 font-bold text-lg px-2" title="彻底删除此任务">✕</button>
+
+                  <div class="flex justify-between items-start mb-2 pr-6">
+                    <div class="flex items-center gap-3">
+                      <span class="font-bold text-lg text-white flex items-center gap-2">
+                        <span v-if="task.priority === 'high'" class="text-red-500 text-sm animate-pulse" title="高优先级">🔥</span>
+                        {{ task.title }}
+                      </span>
+                      <span class="text-[10px] bg-white/10 px-2 py-0.5 rounded text-white/70 border border-white/5">🎯 {{ task.target }}</span>
+                    </div>
+                    <span class="text-xs font-mono text-white/40">{{ task.time }}</span>
+                  </div>
+
+                  <p class="text-white/60 text-sm mb-4 leading-relaxed">{{ task.desc }}</p>
+
+                  <div class="flex justify-between items-center border-t border-white/5 pt-3">
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs text-white/50">终端执行状态：</span>
+                      <span v-if="task.status === 'active'" class="text-xs font-bold text-orange-400 bg-orange-500/10 border border-orange-500/30 px-2 py-1 rounded shadow-inner">⏳ 执行中...</span>
+                      <span v-else class="text-xs font-bold text-green-400 bg-green-500/10 border border-green-500/30 px-2 py-1 rounded shadow-[0_0_8px_rgba(34,197,94,0.2)]">✅ 确认完成</span>
+                    </div>
+                    <button v-if="task.status === 'active'" @click="forceCompleteTask(task.id)" class="text-[10px] text-white/40 hover:text-green-400 transition-colors btn-press">强制完结此任务</button>
+                  </div>
+                </div>
+              </transition-group>
+
+              <div v-if="activeTasks.length === 0" class="absolute inset-0 flex flex-col items-center justify-center opacity-20 pointer-events-none mt-40">
+                <span class="text-6xl mb-4">📭</span>
+                <span class="text-xl font-bold tracking-widest">当前无进行中的战术任务</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="activeTab === 'device'" class="w-full h-full flex gap-4 absolute inset-0">
+          <div class="glass-panel w-96 p-5 flex flex-col">
+            <h2 class="text-white font-bold text-lg mb-6 border-b border-white/10 pb-3">🎛️ 舞台数据同步</h2>
+            <div class="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-5 mb-6 text-center flex flex-col">
+              <div class="text-blue-300 text-xs font-bold mb-2">当前系统下发选手</div>
+
+              <div class="flex flex-col gap-1 mb-4 flex-1 justify-center">
+                <div v-if="parsedActiveContestants.length === 0" class="text-2xl font-bold text-white/40">等待切场</div>
+                <div v-else v-for="(singer, idx) in parsedActiveContestants" :key="'active'+idx" class="text-2xl font-bold text-white">
+                  {{ singer }}
+                </div>
+              </div>
+
+              <div class="border-t border-blue-500/20 pt-3">
+                <div class="text-blue-300/60 text-[10px] font-bold mb-2">候选选手队列 (即将登场)</div>
+                <div class="flex flex-col gap-1">
+                  <div v-if="parsedNextContestants.length === 0" class="text-sm font-bold text-white/30">暂无候场数据</div>
+                  <div v-else v-for="(nextSinger, idx) in parsedNextContestants.slice(0, 4)" :key="'next'+idx" class="text-[13px] font-bold text-white/80 bg-blue-500/5 rounded py-1">
+                    {{ nextSinger }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-white/5 rounded-2xl p-4 flex-1 overflow-y-auto flex flex-col">
+              <div class="text-white/60 text-xs font-bold mb-3 flex justify-between items-center">
+                <span>🎙️ 主持人阵列管理</span>
+                <span class="text-[9px] bg-blue-500/20 text-blue-400 px-1.5 rounded">实时同步</span>
+              </div>
+              <div class="space-y-2 mb-6">
+                <div v-for="host in stageHosts" :key="host.id" class="flex items-center gap-2 bg-black/50 border border-white/10 rounded-lg px-3 py-2">
+                  <span class="text-sm text-white flex-1">{{ host.name }}</span>
+                  <button @click="deleteHost(host.id)" class="text-red-400 hover:text-red-300 btn-press font-bold">×</button>
+                </div>
+                <div class="flex gap-2">
+                  <input v-model="newHostName" placeholder="新增主持人..." class="flex-1 bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500">
+                  <button @click="addHost" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-bold btn-press flex-shrink-0 transition-colors">➕ 添加</button>
+                </div>
+              </div>
+
+              <div class="text-white/60 text-xs font-bold mt-auto mb-3">舞台组最新汇报</div>
+              <div class="text-sm p-3 rounded-lg border transition-all duration-300"
+                   :class="reportHighlight ? 'bg-green-500 text-white shadow-[0_0_20px_rgba(34,197,94,0.6)] border-green-400 scale-[1.02]' : 'text-green-400 bg-green-500/10 border-green-500/20'">
+                {{ latestMicReport || '暂无设备调配报告' }}
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-panel flex-1 p-5 flex flex-col">
+            <div class="flex justify-between items-center flex-wrap gap-3 border-b border-white/10 pb-3 mb-4">
+              <h2 class="text-white font-bold text-lg whitespace-nowrap">📡 麦克风频段矩阵 (实时同步)</h2>
+
+              <div class="flex gap-2 items-center flex-shrink-0">
+                <input v-model="newMic.id" placeholder="如: 备用1号" class="w-32 bg-black/50 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-blue-500">
+                <div class="w-28 flex-shrink-0">
+                  <cyber-select v-model="newMic.type" :options="[{label:'🎤 手持', value:'hand'}, {label:'🎧 头戴', value:'head'}]" placeholder="类型"></cyber-select>
+                </div>
+                <button @click="addCustomMic" class="flex-shrink-0 btn-press bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-[0_0_10px_rgba(37,99,235,0.3)] transition-colors whitespace-nowrap">添加</button>
+              </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto">
+              <div class="grid grid-cols-4 gap-4">
+                <div v-for="mic in mics" :key="mic.id" class="bg-black/30 border rounded-2xl p-4 relative group transition-colors duration-300"
+                     :class="[mic.isBroken ? 'border-red-500 bg-red-500/20 pulse-red' : 'border-white/10 hover:border-white/30']">
+                  <button @click="deleteMic(mic.id)" class="absolute top-2 right-2 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity z-10">×</button>
+
+                  <div class="flex justify-between items-center mb-3">
+                    <span class="text-lg font-bold" :class="mic.type==='hand'?'text-blue-400':'text-purple-400'">{{ mic.id }}</span>
+                    <span class="text-[10px] px-2 py-0.5 rounded bg-white/10 text-white/80">{{ mic.type==='hand'?'🎤 手持':'🎧 头戴' }}</span>
+                  </div>
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs text-white/50">状态控制</span>
+                    <label class="toggle-switch transform scale-75 origin-right">
+                      <input type="checkbox" v-model="mic.active" @change="toggleMicActive(mic)">
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+
+                  <div v-if="mic.isBroken" class="mt-3 bg-red-900/50 border border-red-500/50 rounded-lg px-3 py-2 text-center text-red-400 text-sm font-bold shadow-inner">
+                    🚫 故障锁定
+                  </div>
+                  <div v-else class="mt-3">
+                    <cyber-select v-model="mic.holder" :options="micHolderOptions" placeholder="无人使用" @change="(val) => handleMicHolderChange(mic.id, val)" :is-success="!!mic.holder" :disabled="!mic.active"></cyber-select>
+                  </div>
+
+                  <button v-if="mic.isBroken" @click="resolveBrokenMic(mic.id)" class="mt-3 w-full bg-red-600 hover:bg-red-500 text-white py-1.5 rounded-lg text-xs font-bold btn-press">
+                    ✅ 故障已排查/处理
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="activeTab === 'staff'" class="w-full h-full flex gap-4 absolute inset-0">
+          <div class="glass-panel w-64 flex-shrink-0 p-5 flex flex-col relative z-30">
+            <h2 class="text-white font-bold text-lg mb-4">👥 建制组别管理</h2>
+            <div class="flex-1 overflow-y-auto space-y-2 mb-4">
+              <div @click="staffFilterGroup = null" class="flex justify-between items-center p-3 rounded-xl border cursor-pointer mb-2 btn-press transition-colors" :class="staffFilterGroup === null ? 'bg-blue-600/20 border-blue-500/50 text-blue-400' : 'bg-white/5 border-white/10 text-white/90'">
+                <span class="text-sm font-bold">🏢 全部人员</span>
+                <span class="text-xs font-mono">{{ approvedUsers.length }}</span>
+              </div>
+              <div class="w-full h-[1px] bg-white/10 my-3"></div>
+
+              <div v-for="(group, index) in groups" :key="group.id" draggable="true" @dragstart="dragStart($event, index)" @dragover.prevent="dragOver($event)" @dragleave="dragLeave($event)" @drop="drop($event, index)"
+                   @click="staffFilterGroup = group.name"
+                   class="flex justify-between items-center p-3 rounded-xl border group cursor-move btn-press transition-colors"
+                   :class="staffFilterGroup === group.name ? 'bg-blue-600/20 border-blue-500/50 text-blue-400' : 'bg-white/5 border-white/10 text-white/90'">
+                <span class="text-sm font-bold" :class="group.isSystem ? 'text-orange-300' : ''">≡ {{ group.name }}</span>
+                <button v-if="!group.isSystem" @click.stop="deleteGroup(group.id)" class="text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+                <span v-else class="text-xs text-orange-400 font-bold">⭐ 核心</span>
+              </div>
+            </div>
+            <div class="flex gap-2 border-t border-white/10 pt-4 mt-auto">
+              <input v-model="newGroupName" placeholder="新增组别..." class="flex-1 min-w-0 bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none">
+              <button @click="addGroup" class="flex-shrink-0 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold btn-press whitespace-nowrap">添加</button>
+            </div>
+          </div>
+
+          <div class="glass-panel flex-1 p-5 flex flex-col min-w-0 relative z-10">
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-white font-bold text-lg">⚙️ 人员架构调配 {{ staffFilterGroup ? `(${staffFilterGroup})` : '' }}</h2>
+            </div>
+
+            <div class="flex gap-3 bg-white/5 p-4 rounded-xl border border-white/10 mb-5 items-center relative z-20">
+              <input v-model="newUser.name" placeholder="姓名" class="flex-1 min-w-0 bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500">
+              <input v-model="newUser.studentNo" @input="newUser.studentNo = newUser.studentNo.replace(/\D/g, '').slice(0,10)" placeholder="学号 (10位数字)" class="flex-[1.2] min-w-0 bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none font-mono focus:border-blue-500">
+
+              <div class="flex-[1.5] min-w-0 relative z-[9999]">
+                <cyber-select v-model="newUser.role" :options="groupOptions" placeholder="分配建制组别..."></cyber-select>
+              </div>
+              <div class="flex-[1.2] min-w-0 relative z-[9999]">
+                <cyber-select v-model="newUser.level" :options="newUserLevelOptions" placeholder="分配级别..."></cyber-select>
+              </div>
+
+              <button @click="addUser" class="flex-shrink-0 bg-green-600 hover:bg-green-500 text-white px-6 py-2.5 rounded-lg text-sm font-bold ml-auto btn-press shadow-[0_0_15px_rgba(34,197,94,0.3)] whitespace-nowrap">📥 后台直录</button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto border border-white/10 rounded-xl relative z-10">
+              <table class="w-full text-left text-sm table-fixed">
+                <thead class="bg-[#1c1c1e] text-white/50 sticky top-0 z-10 shadow-md">
+                <tr>
+                  <th class="p-4 w-[8%] text-center font-bold">序号</th>
+                  <th class="p-4 w-[15%] font-bold">姓名</th>
+                  <th class="p-4 w-[17%] font-bold">学号</th>
+                  <th class="p-4 w-[15%] font-bold">归属组别</th>
+                  <th class="p-4 w-[15%] font-bold">权限层级</th>
+                  <th class="p-4 w-[30%] text-right font-bold pr-6">系统操作</th>
+                </tr>
+                </thead>
+                <tbody class="divide-y divide-white/5">
+                <tr v-for="(u, index) in staffFilteredAndSortedUsers" :key="u.id" class="hover:bg-white/5 transition-colors">
+                  <td class="p-4 text-center text-white/50 font-mono">{{ index + 1 }}</td>
+                  <td class="p-4 font-bold text-white truncate">{{ u.name }}</td>
+                  <td class="p-4 text-white/60 font-mono truncate">{{ u.studentNo || '未绑定' }}</td>
+                  <td class="p-3">
+                    <cyber-select v-model="u.role" :options="groupOptions" placeholder="请选择组别" @change="(val) => { if(val !== '导演组' && u.level === 1) u.level = 3; updateStaffInfo(u); }"></cyber-select>
+                  </td>
+                  <td class="p-3">
+                    <cyber-select v-model="u.level" :options="u.role === '导演组' ? [{label:'1级', value:1}, {label:'2级', value:2}, {label:'3级', value:3}] : [{label:'2级', value:2}, {label:'3级', value:3}]" placeholder="请选择级别" @change="() => updateStaffInfo(u)"></cyber-select>
+                  </td>
+                  <td class="p-4 text-right pr-6 whitespace-nowrap">
+                    <button v-if="u.level !== 1" @click="resetPwd(u)" class="text-orange-400 hover:text-orange-300 font-bold btn-press bg-orange-500/10 border border-orange-500/30 px-3 py-1.5 rounded-lg text-xs transition-colors mr-2">🔑 重置密码</button>
+                    <button v-if="u.level !== 1" @click="deleteUser(u.id)" class="text-red-400 hover:text-red-300 font-bold btn-press bg-red-500/10 border border-red-500/30 px-3 py-1.5 rounded-lg text-xs transition-colors">吊销档案</button>
+                    <span v-else class="text-[10px] text-purple-400 border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 rounded font-bold cursor-pointer hover:bg-purple-500/20 transition-colors" @dblclick="deleteLevel1User(u)" title="双击输入口令强制删除">受系统保护</span>
+                  </td>
+                </tr>
+                <tr v-if="staffFilteredAndSortedUsers.length === 0">
+                  <td colspan="6" class="text-center py-10 text-white/30">当前分类下暂无人员数据</td>
+                </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="glass-panel w-[400px] flex-shrink-0 p-5 flex flex-col relative z-[90] transition-colors duration-300"
+               :class="pendingStaff.length > 0 ? 'border-2 border-orange-500/50 shadow-[0_0_20px_rgba(249,115,22,0.15)]' : 'border border-white/10 bg-black/20'">
+
+            <h2 class="font-bold text-lg mb-3 flex items-center gap-2 transition-colors duration-300" :class="pendingStaff.length > 0 ? 'text-orange-400' : 'text-white/60'">
+              <span :class="{'animate-pulse': pendingStaff.length > 0}">🔔</span> 待审批注册申请 ({{ pendingStaff.length }})
+            </h2>
+
+            <div class="flex-1 overflow-y-auto space-y-3 pr-2 relative">
+              <div v-for="u in pendingStaff" :key="u.id" class="bg-black/40 border border-orange-500/30 rounded-xl p-3 flex flex-col gap-3 transition-colors hover:bg-black/60 relative z-10">
+                <div class="flex flex-col">
+                  <span class="font-bold text-white text-base">{{ u.name }} <span class="text-xs text-white/50 font-mono ml-2">{{ u.studentNo }}</span></span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="flex-1 min-w-0 relative z-[9999]">
+                    <cyber-select v-model="u.role" :options="groupOptions" placeholder="请分配组别"></cyber-select>
+                  </div>
+                  <div class="flex-1 min-w-0 relative z-[9999]">
+                    <cyber-select v-model="u.level" :options="[{label:'⭐ 2级(组长)', value:2}, {label:'🛡️ 3级(组员)', value:3}]" placeholder="请分配级别"></cyber-select>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2 mt-1">
+                  <button @click="rejectStaff(u.id)" class="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 py-2.5 rounded-lg text-sm font-bold btn-press">❌ 驳回</button>
+                  <button @click="approveStaff(u)" class="flex-[1.5] bg-green-600 hover:bg-green-500 text-white py-2.5 rounded-lg text-sm font-bold btn-press shadow-[0_0_10px_rgba(34,197,94,0.3)]">✅ 批准接入</button>
+                </div>
+              </div>
+
+              <div v-if="pendingStaff.length === 0" class="absolute inset-0 flex flex-col items-center justify-center opacity-30 pointer-events-none pb-10">
+                <span class="text-5xl mb-4">📭</span>
+                <span class="text-base font-bold tracking-widest">当前无待审批申请</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="activeTab === 'log'" class="w-full h-full flex flex-col gap-4 absolute inset-0">
+          <div class="flex justify-between items-center ml-2 pr-6 border-b border-white/10 pb-3 mb-2 mt-2">
+            <h2 class="text-white font-bold text-xl">🗄️ 全域审计黑匣子</h2>
+            <button @click="clearAllLogs" class="bg-red-600 hover:bg-red-500 text-white border border-red-500/50 px-5 py-2 rounded-xl text-sm font-bold shadow-[0_0_15px_rgba(220,38,38,0.3)] transition-colors btn-press flex items-center gap-2">
+              <span>⚠️</span> 彻底清空所有日志
+            </button>
+          </div>
+
+          <div class="flex-1 grid grid-cols-3 gap-6">
+            <div class="glass-panel p-5 flex flex-col"><h3 class="text-blue-400 font-bold mb-4">💬 指挥控制流</h3><div class="flex-1 overflow-y-auto space-y-2"><div v-for="log in logs.filter(l=>l.category==='指挥')" class="bg-blue-500/10 border-l-2 border-blue-500 p-2 text-sm"><b class="text-blue-300">{{ log.sender }}:</b> {{ log.content }}</div></div></div>
+            <div class="glass-panel p-5 flex flex-col"><h3 class="text-green-400 font-bold mb-4">🚶‍♂️ 人员行为流</h3><div class="flex-1 overflow-y-auto space-y-2"><div v-for="log in logs.filter(l=>l.category==='行为')" class="bg-green-500/10 border-l-2 border-green-500 p-2 text-sm"><b class="text-green-300">{{ log.sender }}:</b> {{ log.content }}</div></div></div>
+            <div class="glass-panel p-5 flex flex-col"><h3 class="text-orange-400 font-bold mb-4">⚙️ 核心系统流</h3><div class="flex-1 overflow-y-auto space-y-2"><div v-for="log in logs.filter(l=>l.category==='系统')" class="bg-white/5 border-l-2 p-2 text-sm" :class="log.level==='danger'?'border-red-500 text-red-300':'border-orange-500'">{{ log.content }}</div></div></div>
+          </div>
+        </div>
+
+      </transition>
+    </div>
+
+    <transition name="modal">
+      <div v-if="sysModal.show" class="fixed inset-0 z-[2000] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
+        <div class="modal-box bg-[#1c1c1e] border border-white/10 rounded-2xl p-6 w-[400px] shadow-2xl" @click.stop>
+          <h3 class="text-lg font-bold mb-3" :class="sysModal.isDanger ? 'text-red-500' : 'text-blue-500'">{{ sysModal.title }}</h3>
+          <div class="text-white/80 text-sm mb-6 leading-relaxed whitespace-pre-line" v-html="sysModal.content"></div>
+          <div class="flex gap-3 justify-end">
+            <button v-if="sysModal.type==='confirm'" @click="sysModal.show=false" class="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-bold btn-press text-white">取消</button>
+            <button @click="sysModal.onConfirm" class="px-5 py-2.5 rounded-xl text-white text-sm font-bold btn-press" :class="sysModal.isDanger ? 'bg-red-600 hover:bg-red-500' : 'bg-blue-600 hover:bg-blue-500'">确定</button>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <transition name="modal">
+      <div v-if="deviceErrorModal.show" class="fixed inset-0 z-[2000] flex items-center justify-center bg-black/90 backdrop-blur-md px-4">
+        <div class="modal-box bg-red-950 border-2 border-red-500 rounded-3xl p-8 w-full max-w-md shadow-[0_0_50px_rgba(239,68,68,0.5)] text-center">
+          <div class="text-7xl mb-4 animate-pulse">🚨</div>
+          <h3 class="text-2xl font-black text-red-500 mb-4 tracking-wider">终端高危异常</h3>
+          <p class="text-white/90 text-sm mb-8 leading-relaxed bg-black/50 p-4 rounded-xl border border-red-500/30 text-left">
+            <b>汇报终端：</b>{{ deviceErrorModal.sender }}<br><br>
+            <b>通报内容：</b><span class="text-red-400 font-bold">{{ deviceErrorModal.content }}</span>
+          </p>
+          <button @click="ackDeviceError" class="w-full bg-red-600 hover:bg-red-500 text-white rounded-xl py-4 font-bold text-lg shadow-[0_5px_15px_rgba(239,68,68,0.4)] btn-press transition-colors">收到并立即介入处理</button>
+        </div>
+      </div>
+    </transition>
+
+    <transition name="modal">
+      <div v-if="sosDetailsModal.show && sosDetailsModal.msg" class="fixed inset-0 z-[2000] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4" @click.self="sosDetailsModal.show=false">
+        <div class="modal-box bg-[#1c1c1e] border border-white/10 rounded-2xl p-6 w-full max-w-lg shadow-2xl flex flex-col max-h-[80vh]">
+          <div class="flex justify-between items-start mb-4 border-b border-white/10 pb-3">
+            <h3 class="text-lg font-bold text-red-500 flex items-center gap-2"><span class="animate-pulse">🔴</span> SOS 强确认回执追踪</h3>
+            <button @click="sosDetailsModal.show=false" class="text-white/40 hover:text-white font-bold btn-press">✕</button>
+          </div>
+          <div class="text-sm text-white/80 mb-4 bg-red-950/30 p-3 rounded-lg border border-red-500/30 font-bold">
+            发出的指令：{{ sosDetailsModal.msg.content }}
+          </div>
+          <div class="flex-1 overflow-y-auto pr-2 space-y-4">
+            <div v-for="g in groups" :key="g.id" class="bg-black/30 p-3 rounded-xl border border-white/5">
+              <h4 class="text-white/90 font-bold text-sm mb-2">{{ g.name }}</h4>
+              <div class="flex flex-wrap gap-2">
+                <div v-for="u in users.filter(x => x && x.role === g.name)" :key="u.id"
+                     class="px-2 py-1.5 rounded-lg text-xs font-bold border transition-colors flex items-center gap-1 shadow-sm"
+                     :class="(sosDetailsModal.msg.acks || []).includes(u.name) ? 'bg-green-500/20 text-green-400 border-green-500/30 shadow-[0_0_8px_rgba(34,197,94,0.2)]' : 'bg-red-500/10 text-red-400/80 border-red-500/30'">
+                  <span>{{ u.name }}</span>
+                  <span>{{ (sosDetailsModal.msg.acks || []).includes(u.name) ? '✓' : '✗' }}</span>
+                </div>
+                <div v-if="users.filter(x => x && x.role === g.name).length === 0" class="text-[10px] text-white/20">此组别暂无录入人员</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <transition name="modal">
+      <div v-if="atGroupModal.show" class="fixed inset-0 z-[700] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+        <div class="modal-box glass-panel p-6 w-[350px]">
+          <div class="flex justify-between items-center mb-4 border-b border-white/10 pb-2">
+            <h3 class="text-white font-bold">@ 快速定向呼叫</h3>
+            <button @click="atGroupModal.show=false" class="text-white/40 hover:text-white font-bold text-xl btn-press">✕</button>
+          </div>
+          <div class="space-y-2 max-h-64 overflow-y-auto pr-2">
+            <button v-for="g in groups" :key="'at'+g.id" @click="selectAtGroup(g.name)" class="w-full bg-white/5 border border-white/10 hover:bg-blue-600/30 hover:border-blue-500/50 transition-colors rounded-xl p-3 text-left text-sm font-bold text-white/90 btn-press">
+              @ {{ g.name }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+  </div>
+</div>
+
+<script>
+  const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
+
+  const CyberSelect = {
+    props: {
+      modelValue: { type: [String, Number], default: '' },
+      options: { type: Array, required: true },
+      placeholder: { type: String, default: '请选择...' },
+      isSuccess: { type: Boolean, default: false },
+      disabled: { type: Boolean, default: false }
+    },
+    emits: ['update:modelValue', 'change'],
+    template: `
+      <div class="relative w-full" @click.stop="toggleOpen">
+        <div class="bg-black/50 border rounded-xl px-4 py-3.5 text-base text-white flex justify-between items-center shadow-inner transition-colors"
+             :class="disabled ? 'opacity-40 cursor-not-allowed bg-black/80 grayscale border-white/5' : (open ? 'border-theme-blue shadow-[0_0_10px_rgba(10,132,255,0.3)] cursor-pointer' : (isSuccess ? 'border-green-500/50 text-green-400 bg-green-500/10 cursor-pointer' : 'border-white/10 hover:border-white/30 cursor-pointer'))">
+          <span class="truncate pr-2" :class="!modelValue ? 'text-white/30' : ''">{{ disabled ? '无人使用' : (selectedLabel || placeholder) }}</span>
+          <span v-if="!disabled" class="text-xs opacity-50 transition-transform duration-200" :class="{'rotate-180': open}">▼</span>
+          <span v-else class="text-xs opacity-30">🔒</span>
+        </div>
+        <transition name="fade">
+          <div v-if="open && !disabled" class="absolute left-0 right-0 mt-1.5 bg-[#1c1c1e]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl z-[9999] max-h-[300px] overflow-y-auto custom-scrollbar">
+            <div v-if="options.length === 0" class="px-4 py-4 text-sm text-white/30 text-center">暂无选项</div>
+            <div v-for="opt in options" :key="opt.value" @click.stop="select(opt)"
+                 class="px-4 py-3.5 text-base cursor-pointer border-b border-white/5 last:border-0"
+                 :class="opt.value === modelValue ? 'text-theme-blue font-bold bg-blue-500/10' : 'text-white/90 hover:bg-white/10'">
+              {{ opt.label }}
+            </div>
+          </div>
+        </transition>
+      </div>
+    `,
+    data() { return { open: false } },
+    computed: {
+      selectedLabel() {
+        const s = this.options.find(o => String(o.value) === String(this.modelValue));
+        return s ? s.label : (this.modelValue || '');
+      }
+    },
+    methods: {
+      toggleOpen() {
+        if (!this.disabled) {
+          this.open = !this.open;
+        }
+      },
+      select(opt) {
+        this.$emit('update:modelValue', opt.value);
+        this.$emit('change', opt.value);
+        this.open = false;
+      },
+      closeListener() { this.open = false; }
+    },
+    mounted() { document.addEventListener('click', this.closeListener); },
+    beforeUnmount() { document.removeEventListener('click', this.closeListener); }
+  };
+
+  const app = createApp({
+    setup() {
+      const currentProtocol = window.location.protocol;
+      const currentHostname = window.location.hostname;
+
+      const isDesktopApp = currentProtocol === 'file:' ||
+              currentProtocol.includes('tauri') ||
+              currentHostname.includes('tauri') ||
+              currentHostname === 'localhost' ||
+              currentHostname === '127.0.0.1';
+
+      const host = isDesktopApp ? "https://xuanfu.asia" : currentProtocol + '//' + window.location.host;
+      const wsUrl = isDesktopApp ? "wss://xuanfu.asia/ws/screen" : (currentProtocol === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/ws/screen';
+
+      const isLogged = ref(false);
+      const isLoggingIn = ref(false);
+      const adminPwd = ref('');
+      const wsConnected = ref(false);
+      const activeTab = ref('dash');
+      const chatBox = ref(null);
+      let heartbeatTimer = null;
+
+      const sysModal = ref({ show: false, type: 'alert', title: '', content: '', isDanger: false, onConfirm: null });
+      const customAlert = (content, title='提示') => { sysModal.value = { show: true, type: 'alert', title, content, isDanger: false, onConfirm: () => sysModal.value.show = false }; };
+      const customConfirm = (title, content, isDanger, onConfirmCallback) => { sysModal.value = { show: true, type: 'confirm', title, content, isDanger, onConfirm: () => { onConfirmCallback(); sysModal.value.show = false; } }; };
+
+      const showToast = (m, t='success') => {
+        const c = document.createElement('div');
+        c.className = 'toast show';
+        c.innerText = (t==='error'?'❌ ':'✅ ') + m;
+        document.body.appendChild(c);
+        setTimeout(() => { c.classList.remove('show'); setTimeout(()=>c.remove(), 300); }, 2500);
+      };
+
+      const fetchWithAuth = async (url, options = {}) => {
+        const finalUrl = url.startsWith('/') ? host + url : url;
+        const token = localStorage.getItem('admin_token');
+        if (!options.headers) options.headers = {};
+        if (token) options.headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(finalUrl, options);
+        if (res.status === 401) {
+          isLogged.value = false;
+          localStorage.removeItem('admin_token');
+          customAlert("您的登录凭证已失效或被拦截，请重新进行权限核验！", "🛑 鉴权拦截");
+          throw new Error("Unauthorized");
+        }
+        return res;
+      };
+
+      const checkLogin = () => {
+        if(localStorage.getItem('admin_token')) {
+          isLogged.value = true;
+          initSystem();
+        }
+      };
+
+      const doLogin = async () => {
+        if(!adminPwd.value.trim()) return customAlert("导播口令不能为空！");
+        isLoggingIn.value = true;
+        try {
+          const formData = new URLSearchParams();
+          formData.append('role', 'admin');
+          formData.append('pwd', adminPwd.value.trim());
+
+          const res = await fetch(`${host}/api/scores/auth`, {
+            method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: formData.toString()
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if(data.token) {
+              localStorage.setItem('admin_token', data.token);
+              localStorage.setItem('admin_pwd', adminPwd.value.trim());
+              isLogged.value = true; adminPwd.value = ''; initSystem();
+            }
+          } else { customAlert("口令错误，系统拒绝下发令牌！", "⚠️ 鉴权失败"); }
+        } catch(e) { customAlert("网络异常，无法连接到认证服务器。"); }
+        finally { isLoggingIn.value = false; }
+      };
+
+      const doLogout = () => { localStorage.removeItem('admin_token'); localStorage.removeItem('admin_pwd'); isLogged.value = false; };
+
+      const deviceErrorModal = ref({ show: false, sender: '', content: '', micId: null });
+      const sosDetailsModal = ref({ show: false, msg: null });
+      const atGroupModal = ref({ show: false });
+
+      const groups = ref([]);
+      const groupOptions = computed(() => groups.value.map(g => ({label: g.name, value: g.name})));
+      const groupOptionsWithAll = computed(() => [{label:'🌐 全域监控', value:null}, ...groupOptions.value]);
+
+      const users = ref([]);
+      const pendingStaff = ref([]);
+      const approvedUsers = computed(() => users.value.filter(u => u.status === 'APPROVED' || !u.status));
+
+      const taskTargetOptions = computed(() => {
+        let opts = [{label: '🌐 下发至全体终端', value: 'all'}];
+        groups.value.forEach(g => opts.push({label: `🛡️ 组别: ${g.name}`, value: g.name}));
+        users.value.forEach(u => {
+          if (u && u.name) opts.push({label: `👤 个人: ${u.name} (${u.role})`, value: u.name});
+        });
+        return opts;
+      });
+
+      const mics = ref([
+        ...Array.from({length:4}, (_,i)=>({id:'H'+(i+1), type:'hand', active:true, holder:'', isBroken: false})),
+        ...Array.from({length:4}, (_,i)=>({id:'M'+(i+1), type:'head', active:true, holder:'', isBroken: false}))
+      ]);
+      const stageHosts = ref([ { id: 'h1', name: '男主持' }, { id: 'h2', name: '女主持' } ]);
+      const contestants = ref([]);
+
+      const micHolderOptions = computed(() => {
+        let opts = [{label: '无人使用', value: ''}];
+        stageHosts.value.forEach(h => opts.push({label: `🎤 主持: ${h.name}`, value: h.name}));
+        contestants.value.forEach(c => opts.push({label: `🎵 ${c.name}`, value: c.name}));
+        return opts;
+      });
+
+      const fetchHistoryFromCloud = async () => {
+        try {
+          const res = await fetchWithAuth('/api/tactics/history');
+          if(res.ok) {
+            const data = await res.json();
+            if(data.messages) messages.value = data.messages;
+            if(data.logs) logs.value = data.logs;
+          }
+        } catch(e) {
+          console.warn("无法连接历史记录接口，使用本地缓存降级");
+        }
+      };
+
+      const fetchTacticsData = async () => {
+        try {
+          const [gRes, mRes, hRes] = await Promise.all([ fetchWithAuth('/api/tactics/groups'), fetchWithAuth('/api/tactics/mics'), fetchWithAuth('/api/tactics/hosts') ]);
+
+          if (gRes.ok) {
+            let fetchedGroups = await gRes.json();
+            let dirGroup = fetchedGroups.find(g => g.name === '导演组');
+            if (dirGroup) {
+              dirGroup.isSystem = true;
+            } else {
+              fetchedGroups.unshift({ id: 'g_dir_' + Date.now(), name: '导演组', isSystem: true });
+            }
+            groups.value = fetchedGroups;
+          }
+
+          if (mRes.ok) { const fetchedMics = await mRes.json(); if (fetchedMics && fetchedMics.length > 0) mics.value = fetchedMics; }
+          if (hRes.ok) stageHosts.value = await hRes.json();
+        } catch(e) { console.error("配置拉取异常", e); }
+      };
+
+      const fetchContestants = async () => {
+        try {
+          const res = await fetchWithAuth('/api/admin/contestants');
+          if (res.ok) contestants.value = await res.json();
+        } catch(e) {}
+      };
+
+      const saveGroupsData = () => { fetchWithAuth('/api/tactics/groups', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(groups.value) }); };
+      const saveMicsData = () => {
+        fetchWithAuth('/api/tactics/mics', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(mics.value) });
+        if (wsConnected.value && ws) { ws.send(JSON.stringify({ type: 'SYNC_MICS', mics: mics.value })); }
+      };
+      const saveHostsData = () => {
+        fetchWithAuth('/api/tactics/hosts', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(stageHosts.value) });
+        if(wsConnected.value && ws) ws.send(JSON.stringify({ type: 'SYNC_HOSTS', hosts: stageHosts.value }));
+      };
+
+      const saveUsersData = () => { localStorage.setItem('sys_users', JSON.stringify(users.value)); };
+
+      const updateStaffInfo = async (u) => {
+        try {
+          const res = await fetchWithAuth(`/api/staff/${u.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({...u})
+          });
+          if (res.ok) {
+            saveUsersData();
+            showToast("建制调整已实时生效");
+          } else {
+            showToast("同步数据库失败", "error");
+          }
+        } catch (e) {
+          showToast("网络异常", "error");
+        }
+      };
+
+      let dragStartIndex = -1;
+      const dragStart = (e, index) => { dragStartIndex = index; e.dataTransfer.effectAllowed = 'move'; };
+      const dragOver = (e) => { e.currentTarget.classList.add('drag-over'); };
+      const dragLeave = (e) => { e.currentTarget.classList.remove('drag-over'); };
+      const drop = (e, index) => {
+        e.currentTarget.classList.remove('drag-over');
+        if(dragStartIndex === index) return;
+        const movedItem = groups.value.splice(dragStartIndex, 1)[0];
+        groups.value.splice(index, 0, movedItem); saveGroupsData();
+      };
+
+      const activeContestant = ref(''); const nextContestant = ref('');
+      const latestMicReport = ref(''); const reportHighlight = ref(false);
+
+      // 🚀 核心优化：解析传过来的舞台数据为数组，以支持多选手
+      const parsedActiveContestants = computed(() => {
+        if (!activeContestant.value || activeContestant.value === '等待切场') return [];
+        return activeContestant.value.split(' | ').filter(s => s.trim());
+      });
+      const parsedNextContestants = computed(() => {
+        if (!nextContestant.value || nextContestant.value === '暂无安排' || nextContestant.value === '暂无数据') return [];
+        return nextContestant.value.split(' | ').filter(s => s.trim());
+      });
+
+      const toggleMicActive = (mic) => {
+        if (!mic.active) {
+          mic.holder = '';
+        }
+        saveMicsData();
+      };
+
+      const handleMicHolderChange = (micId, newHolder) => {
+        if (newHolder) { mics.value.forEach(m => { if (m && m.id !== micId && m.holder === newHolder) m.holder = ''; }); }
+        saveMicsData();
+      };
+
+      const newMic = ref({ id: '', type: 'hand' });
+      const addCustomMic = () => {
+        if (!newMic.value.id.trim()) return customAlert("请填写自定义的麦克风编号！");
+        if (mics.value.find(m => m && m.id === newMic.value.id.trim())) return customAlert("该麦克风编号已存在！");
+        mics.value.push({ id: newMic.value.id.trim(), type: newMic.value.type, active: true, holder: '', isBroken: false });
+        saveMicsData(); newMic.value.id = '';
+      };
+      const deleteMic = (id) => { mics.value = mics.value.filter(m=> m && m.id!==id); saveMicsData(); };
+      const resolveBrokenMic = (id) => { const mic = mics.value.find(m => m && m.id === id); if(mic) { mic.isBroken = false; saveMicsData(); } };
+      const ackDeviceError = () => { deviceErrorModal.value.show = false; };
+
+      const newHostName = ref('');
+      const addHost = () => {
+        if(!newHostName.value.trim()) return;
+        stageHosts.value.push({ id: 'h'+Date.now(), name: newHostName.value.trim() });
+        newHostName.value = ''; saveHostsData();
+      };
+      const deleteHost = (id) => { stageHosts.value = stageHosts.value.filter(h => h && h.id !== id); saveHostsData(); };
+
+      const getSafeArray24h = (key, defaultArr) => {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(key));
+          if (Array.isArray(parsed)) {
+            const now = Date.now();
+            const validItems = parsed.filter(item => item !== null && typeof item === 'object' && (now - (item.id || now) < 86400000));
+            if (validItems.length > 0) return validItems;
+          }
+        } catch(e) {}
+        return defaultArr;
+      };
+
+      const messages = ref(getSafeArray24h('sys_messages', []));
+      const logs = ref(getSafeArray24h('sys_logs', []));
+      const recentLogs = computed(() => logs.value.slice().reverse().slice(0, 15));
+      const isSosMode = ref(false);
+      const inputText = ref('');
+
+      const activeTasks = ref(getSafeArray24h('sys_tasks', []));
+      const newTask = ref({ title: '', target: null, content: '', priority: 'high' });
+
+      const issueTask = () => {
+        if(!newTask.value.title.trim() || !newTask.value.content.trim() || !newTask.value.target) return customAlert("请填写完整的任务标题、目标与详情说明！");
+
+        const taskObj = {
+          id: Date.now(),
+          title: newTask.value.title.trim(),
+          target: newTask.value.target,
+          desc: newTask.value.content.trim(),
+          priority: newTask.value.priority || 'high',
+          status: 'active',
+          isPinned: false,
+          time: new Date().toLocaleTimeString('zh-CN', {hour12:false}).substring(0,5),
+          sender: '导演组'
+        };
+
+        activeTasks.value.unshift(taskObj);
+        localStorage.setItem('sys_tasks', JSON.stringify(activeTasks.value));
+
+        if(wsConnected.value && ws) {
+          ws.send(JSON.stringify({
+            type: 'NEW_TASK',
+            task: taskObj
+          }));
+
+          let targetText = taskObj.target === 'all' ? '全域' : taskObj.target;
+          let priorityText = taskObj.priority === 'high' ? ' [🚨高优]' : '';
+          ws.send(JSON.stringify({
+            type: 'chat', sender: '导演组', channel: 'global',
+            content: `[📌 战术任务下发]${priorityText} ${taskObj.title} -> 指派给: ${targetText}`
+          }));
+        }
+
+        newTask.value = { title: '', target: null, content: '', priority: 'high' };
+      };
+
+      const deleteTask = (id) => {
+        customConfirm("⚠️ 删除任务确认", "确定要撤销并彻底删除这条战术任务吗？", true, () => {
+          activeTasks.value = activeTasks.value.filter(x => x.id !== id);
+          localStorage.setItem('sys_tasks', JSON.stringify(activeTasks.value));
+          if(wsConnected.value && ws) {
+            ws.send(JSON.stringify({ type: 'DELETE_TASK', taskId: id }));
+          }
+          showToast("战术任务已撤销并从指令板删除。");
+        });
+      };
+
+      const forceCompleteTask = (id) => {
+        const t = activeTasks.value.find(x => x.id === id);
+        if(t) {
+          t.status = 'completed';
+          localStorage.setItem('sys_tasks', JSON.stringify(activeTasks.value));
+        }
+      };
+
+      const saveSysData = () => {
+        if (messages.value.length > 500) messages.value.shift();
+        if (logs.value.length > 500) logs.value.shift();
+        localStorage.setItem('sys_messages', JSON.stringify(messages.value));
+        localStorage.setItem('sys_logs', JSON.stringify(logs.value));
+      };
+
+      const clearAllLogs = () => {
+        customConfirm("⚠️ 危险操作：清空全局日志", "确定要彻底清空所有的指挥、行为与核心系统日志吗？\n\n注意：此操作将从云端数据库中永久物理删除所有记录，一旦执行绝无可能恢复！", true, async () => {
+          try {
+            const res = await fetchWithAuth('/api/tactics/history', { method: 'DELETE' });
+            if (res.ok) {
+              logs.value = [];
+              messages.value = [];
+              localStorage.removeItem('sys_logs');
+              localStorage.removeItem('sys_messages');
+              showToast("全局日志已从云端彻底抹除！");
+            } else {
+              showToast("清空失败，后端拒绝请求", "error");
+            }
+          } catch(e) {
+            showToast("网络异常，无法清空", "error");
+          }
+        });
+      };
+
+      const toggleSosChannel = () => {
+        isSosMode.value = !isSosMode.value;
+        if(isSosMode.value) {
+          chatChannel.value = '';
+          customAlert("已进入 SOS 应急模式，您下发的指令将强制所有手机终端震动报警并弹窗！", "🚨 警告");
+        } else {
+          chatChannel.value = 'global';
+        }
+      };
+
+      const selectAtGroup = (gName) => {
+        inputText.value += `@${gName} `;
+        atGroupModal.value.show = false;
+      };
+
+      const dashActiveGroup = ref('global');
+      const dashFilteredMessages = computed(() => {
+        if (isSosMode.value) return messages.value.filter(m => m && m.isSos);
+        if (dashActiveGroup.value === 'global') return messages.value.filter(m => m && !m.isSos && (!m.channel || m.channel === 'global'));
+        return messages.value.filter(m => m && !m.isSos && (m.targetGroup === dashActiveGroup.value || m.role === dashActiveGroup.value));
+      });
+
+      const openSosDetails = (msg) => { sosDetailsModal.value = { show: true, msg: msg }; };
+
+      const getGroupOnlineCountObj = (groupName) => {
+        let list = groupName ? users.value.filter(u => u && u.role === groupName) : users.value;
+        return { online: list.filter(u => u && u.online).length, total: list.length };
+      };
+      const getGroupOnlineStats = (groupName) => { const stats = getGroupOnlineCountObj(groupName); return `${stats.online} / ${stats.total}`; };
+
+      const markUserOnline = (senderName) => {
+        const u = users.value.find(x => x && x.name === senderName);
+        if (u) {
+          u.online = true;
+          u.lastSeen = Date.now();
+          saveUsersData();
+        }
+      };
+
+      const ctrlFilterGroup = ref(null);
+      const ctrlFilteredAndSortedUsers = computed(() => {
+        let list = ctrlFilterGroup.value ? users.value.filter(u => u && u.role === ctrlFilterGroup.value) : users.value;
+        return list.slice().sort((a, b) => ((a && a.level) || 3) - ((b && b.level) || 3));
+      });
+
+      const bulkAction = (actionType, groupName, levelFilter) => {
+        let actionName = actionType === 'lock' ? '锁定' : '强制下线';
+        let scopeName = groupName ? `【${groupName}】` : '【全域监控】';
+        customConfirm(`⚠️ 批量${actionName}确认`, `您即将对 ${scopeName} 执行<b>${actionName}</b>操作。<br><br>注意：系统已自动保护 1级(导演) 的连接。是否继续？`, true, () => {
+          ws.send(JSON.stringify({ type: 'BULK_ACTION', group: groupName || 'all', level: levelFilter, action: actionType }));
+          customAlert(`已向终端网络下发批量信令。`);
+        });
+      };
+
+      const sendSingleAction = (action, targetName) => {
+        if(wsConnected.value && ws) {
+          ws.send(JSON.stringify({ type: 'SINGLE_ACTION', targetName: targetName, action: action }));
+        }
+      };
+
+      const staffFilterGroup = ref(null);
+      const staffFilteredAndSortedUsers = computed(() => {
+        let list = staffFilterGroup.value ? users.value.filter(u => u && u.role === staffFilterGroup.value) : users.value;
+        return list.slice().sort((a, b) => ((a && a.level) || 3) - ((b && b.level) || 3));
+      });
+
+      const newGroupName = ref('');
+      const newUser = ref({ name: '', studentNo: '', role: '', level: '' });
+
+      const newUserLevelOptions = computed(() => {
+        if (newUser.value.role === '导演组') {
+          return [{label:'👑 1级 (导演)', value:1}, {label:'⭐ 2级 (组长)', value:2}, {label:'🛡️ 3级 (组员)', value:3}];
+        } else {
+          return [{label:'⭐ 2级 (组长)', value:2}, {label:'🛡️ 3级 (组员)', value:3}];
+        }
+      });
+
+      watch(staffFilterGroup, (newVal) => {
+        newUser.value.role = newVal || '';
+        if (newVal !== '导演组' && newUser.value.level === 1) {
+          newUser.value.level = '';
+        }
+      });
+
+      const addGroup = () => { if(newGroupName.value.trim()){ groups.value.push({ id: 'g'+Date.now(), name: newGroupName.value.trim(), isSystem: false }); newGroupName.value=''; saveGroupsData(); }};
+      const deleteGroup = (id) => customConfirm("删除组别", "确定要删除吗？", true, () => { groups.value = groups.value.filter(x=> x && x.id!==id); saveGroupsData(); });
+
+      const fetchPendingStaff = async () => {
+        try {
+          const res = await fetchWithAuth('/api/staff/pending');
+          if (res.ok) {
+            const data = await res.json();
+            pendingStaff.value = data.map(newU => {
+              const oldU = pendingStaff.value.find(o => o.id === newU.id);
+              if (oldU) {
+                return {
+                  ...newU,
+                  role: (oldU.role && oldU.role !== '待分配') ? oldU.role : (newU.role === '待分配' ? '' : newU.role),
+                  level: oldU.level ? oldU.level : ''
+                };
+              }
+              return {...newU, level: '', role: (newU.role === '待分配' ? '' : newU.role)};
+            });
+          }
+        } catch (e) {}
+      };
+
+      const approveStaff = async (u) => {
+        if (!u.role || u.role === '待分配') return customAlert("请先为该人员分配具体的建制组别！");
+        if (!u.level) return customAlert("请为该人员分配权限级别！");
+
+        try {
+          const putRes = await fetchWithAuth(`/api/staff/${u.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({...u})
+          });
+          if (!putRes.ok) throw new Error("建制分配失败");
+
+          const res = await fetchWithAuth(`/api/staff/${u.id}/approve?level=${u.level}`, { method: 'POST' });
+          if (res.ok) {
+            showToast(`已批准 ${u.name} 的接入申请！`);
+            fetchPendingStaff();
+            fetchStaffFromCloud();
+          } else {
+            showToast("审批过程发生异常", "error");
+          }
+        } catch (e) {
+          showToast("网络连接异常", "error");
+        }
+      };
+
+      const rejectStaff = (id) => {
+        customConfirm("驳回申请", "确定要驳回并彻底删除此注册申请吗？", true, async () => {
+          try {
+            await fetchWithAuth(`/api/staff/${id}`, { method: 'DELETE' });
+            fetchPendingStaff();
+            showToast("申请已驳回并删除");
+          } catch(e) {
+            showToast("操作失败", "error");
+          }
+        });
+      };
+
+      const resetPwd = (u) => {
+        customConfirm("🔑 重置密码", `确定将 <b>${u.name}</b> 的终端密码重置为 <b class="text-orange-400">123456</b> 吗？<br><br>重置后，该人员的终端将被强制登出，且下次重新登录时必须设置新的安全密码。`, true, async () => {
+          try {
+            const res = await fetchWithAuth(`/api/staff/${u.id}/reset-pwd`, { method: 'POST' });
+            if(res.ok) {
+              if(wsConnected.value && ws) ws.send(JSON.stringify({ type: 'SINGLE_ACTION', targetName: u.name, action: 'kick' }));
+              showToast(`已安全重置 ${u.name} 的密码`);
+            } else {
+              showToast("重置失败", "error");
+            }
+          } catch(e){
+            showToast("重置失败", "error");
+          }
+        });
+      };
+
+      const addUser = async () => {
+        if(!newUser.value.name || !newUser.value.studentNo || !newUser.value.role || !newUser.value.level) return customAlert("请填写完整的建制信息！");
+
+        const perms = {
+          canGlobalBroadcast: true, canGroupBroadcast: true, canSOS: true,
+          isDirector: newUser.value.level === 1
+        };
+
+        const staffPayload = {
+          name: newUser.value.name.trim(), studentNo: newUser.value.studentNo.trim(),
+          role: newUser.value.role, level: newUser.value.level,
+          ...perms
+        };
+        try {
+          const res = await fetchWithAuth('/api/staff', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(staffPayload) });
+          if(res.ok) {
+            const savedStaff = await res.json();
+            users.value.push({...savedStaff, online: false, lastSeen: 0, perms: staffPayload});
+            newUser.value = {name:'', studentNo:'', role: staffFilterGroup.value || '', level: ''}; saveUsersData();
+            showToast("建制人员直录成功，默认密码 123456");
+          } else customAlert("录入失败，后端服务报错。", "❌ 错误");
+        } catch(e) { customAlert("网络异常，无法连接到云端数据库。", "⚠️ 警告"); }
+      };
+
+      const deleteUser = (id) => customConfirm("吊销档案", "确定要永久吊销此人的身份认证吗？此操作将同步从数据库中彻底删除其档案。", true, async () => {
+        try {
+          await fetchWithAuth(`/api/staff/${id}`, { method: 'DELETE' });
+          users.value = users.value.filter(x => x && x.id !== id); saveUsersData();
+          showToast("已成功吊销终端档案");
+        } catch(e) {}
+      });
+
+      const deleteLevel1User = (u) => {
+        sysModal.value = {
+          show: true,
+          type: 'confirm',
+          title: '⚠️ 强制移除指挥官',
+          content: `您正在尝试吊销受保护的一级人员 <b>${u.name}</b>。<br>请输入总控授权口令以继续：<br><input type="password" id="delLvl1Pwd" class="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 mt-3 outline-none text-center tracking-widest text-white">`,
+          isDanger: true,
+          onConfirm: async () => {
+            const pwdInput = document.getElementById('delLvl1Pwd');
+            if (pwdInput && (pwdInput.value === localStorage.getItem('admin_pwd') || pwdInput.value === adminPwdCache)) {
+              try {
+                await fetchWithAuth(`/api/staff/${u.id}`, { method: 'DELETE' });
+                users.value = users.value.filter(x => x && x.id !== u.id);
+                saveUsersData();
+                customAlert("核心人员已成功移除。");
+              } catch(e) {
+                customAlert("网络异常，移除失败。");
+              }
+            } else {
+              customAlert("口令错误，拒绝执行越权操作！");
+            }
+          }
+        };
+      };
+
+      // 🚨 增强解析：支持后端传来的多名选手，由管道符分隔
+      const formatSingerStr = (msg, fallback) => {
+        if (!msg || (!msg.data && !msg.singers)) return fallback;
+
+        // 兼容老版本和新版本的数据结构
+        let singerList = [];
+        if (msg.singers && Array.isArray(msg.singers)) {
+          singerList = msg.singers;
+        } else if (msg.data) {
+          singerList = Array.isArray(msg.data) ? msg.data : [msg.data];
+        }
+
+        if (singerList.length === 0) return fallback;
+
+        let formattedNames = singerList.map(s => {
+          let rawName = typeof s === 'string' ? s : (s.name || fallback);
+          rawName = rawName.replace(/^No\.\s*\d+\s*-?\s*/i, '').trim();
+          if (!rawName) return fallback;
+          return s.displayNum ? `No.${s.displayNum} ${rawName}` : rawName;
+        });
+
+        // 用 " | " 拼接多个名字，前端会在计算属性中再把它们拆成数组渲染
+        return formattedNames.join(' | ');
+      };
+
+      let ws = null;
+      const connectWs = () => {
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          wsConnected.value = true;
+          ws.send(JSON.stringify({ type: 'SYNC_MICS', mics: mics.value }));
+          ws.send(JSON.stringify({ type: 'SYNC_HOSTS', hosts: stageHosts.value }));
+
+          if(heartbeatTimer) clearInterval(heartbeatTimer);
+          heartbeatTimer = setInterval(() => {
+            if(wsConnected.value && ws) ws.send(JSON.stringify({type: 'PING'}));
+
+            const now = Date.now();
+            let changed = false;
+            users.value.forEach(u => {
+              if(u && u.online && (now - (u.lastSeen || 0) > 35000)) {
+                u.online = false;
+                changed = true;
+              }
+            });
+            if(changed) saveUsersData();
+          }, 15000);
+        };
+
+        ws.onmessage = (event) => {
+          const msg = JSON.parse(event.data);
+
+          if (msg.type === 'TACTICS_UPDATE') {
+            fetchPendingStaff();
+            fetchStaffFromCloud();
+          }
+
+          if (msg.type === 'BULK_ACTION') {
+            if (userInfo.value.level !== 1) {
+              const matchGroup = msg.group === 'all' || msg.group === userInfo.value.role;
+              const matchLevel = msg.level === 'all' || msg.level === userInfo.value.level;
+              if (matchGroup && matchLevel) {
+                if (msg.action === 'lock') isLocked.value = true;
+                else if (msg.action === 'unlock') isLocked.value = false;
+                else if (msg.action === 'kick') doLogout();
+              }
+            }
+          }
+
+          if (msg.sender && msg.sender !== '导演组') { markUserOnline(msg.sender); }
+          if (msg.type === 'DEVICE_LOGIN_SYNC') { markUserOnline(msg.username); }
+          if (msg.type === 'PING' || msg.type === 'PONG') {
+            if(msg.sender) markUserOnline(msg.sender);
+            return;
+          }
+
+          if (msg.type === 'SYNC_MICS' && msg.mics) {
+            mics.value = msg.mics;
+          }
+
+          // 🚀 核心修复：捕获前端发来的任务完成状态！
+          if (msg.type === 'TASK_COMPLETED') {
+            const t = activeTasks.value.find(x => x.id === msg.taskId);
+            if (t) {
+              t.status = 'completed';
+              localStorage.setItem('sys_tasks', JSON.stringify(activeTasks.value));
+              // 可选：弹出一个提示告知导播某人完成了任务
+              showToast(`${msg.sender} 已确认完成任务: ${t.title}`);
+            }
+          }
+
+          if (msg.type === 'SHOW_SINGER') { activeContestant.value = formatSingerStr(msg, '未知选手'); }
+          else if (msg.type === 'NEXT_SINGER' || msg.type === 'SHOW_NEXT_SINGER' || msg.type === 'SET_NEXT_SINGER') { nextContestant.value = formatSingerStr(msg, '暂无安排'); }
+          else if (msg.type === 'DEVICE_REPORT') {
+            latestMicReport.value = `[${new Date().toLocaleTimeString('zh-CN').substring(0,5)}] ${msg.sender}: ${msg.content}`;
+            reportHighlight.value = true; setTimeout(() => { reportHighlight.value = false; }, 3000);
+
+            if (msg.content.includes('分配给') || msg.content.includes('派给')) {
+              const micMatch = msg.content.match(/\[(.*?)\]/);
+              let holderRaw = '';
+              if (msg.content.includes('分配给')) {
+                holderRaw = msg.content.split('分配给 ')[1];
+              } else if (msg.content.includes('派给')) {
+                holderRaw = msg.content.split('派给 ')[1];
+              }
+
+              if (micMatch && holderRaw) {
+                const micId = micMatch[1];
+                holderRaw = holderRaw.trim();
+                let finalHolder = holderRaw.includes(' (') ? holderRaw.split(' (')[0].trim() : holderRaw;
+                finalHolder = finalHolder.replace(/^No\.\s*\d+\s*-?\s*/i, '').trim();
+                finalHolder = finalHolder.replace(/\(经审批\)/, '').trim();
+
+                const mic = mics.value.find(m => m && m.id === micId);
+                if (mic) {
+                  mic.holder = finalHolder;
+                  mics.value.forEach(m => { if (m && m.id !== micId && m.holder === finalHolder) m.holder = ''; });
+                  saveMicsData();
+                }
+              }
+            }
+
+            if (msg.content.includes('故障') || msg.content.includes('异常')) {
+              const micMatch = msg.content.match(/麦克风 \[(.*?)\]/);
+              const micId = micMatch ? micMatch[1] : null;
+              if (micId) {
+                const mic = mics.value.find(m => m && m.id === micId);
+                if (mic) {
+                  mic.isBroken = true;
+                  mic.holder = '';
+                  saveMicsData();
+                }
+              }
+              deviceErrorModal.value = { show: true, sender: msg.sender, content: msg.content, micId: micId };
+            }
+          }
+          else if (msg.type === 'SOS_ACK') {
+            const targetSosMsgs = messages.value.filter(m => m && m.isSos && m.isSelf && m.content === msg.content);
+            if (targetSosMsgs.length > 0) {
+              const targetMsg = targetSosMsgs[targetSosMsgs.length - 1];
+              if (!targetMsg.acks) targetMsg.acks = [];
+              if (!targetMsg.acks.includes(msg.sender)) { targetMsg.acks.push(msg.sender); saveSysData(); }
+            }
+          }
+          else if (msg.type === 'chat' || msg.type === 'sos_chat') {
+            let finalSosState = (msg.type === 'sos_chat');
+            if (msg.type === 'sos_chat' && msg.level === 3 && msg.channel !== 'global') { finalSosState = false; }
+
+            messages.value.push({
+              id: Date.now(), sender: msg.sender, role: msg.role, targetGroup: msg.targetGroup,
+              channel: msg.channel, content: msg.content,
+              time: new Date().toLocaleTimeString('zh-CN', {hour12:false}).substring(0,5),
+              isSelf: msg.sender===loginForm.value.name || msg.sender==='总控台' || msg.sender==='导演组', isSos: msg.type==='sos_chat'
+            });
+            logs.value.push({
+              id: Date.now(), time: new Date().toLocaleTimeString('zh-CN', {hour12:false}),
+              category: msg.sender==='导演组'?'指挥':'行为', sender: msg.sender, content: msg.content, level: finalSosState ? 'danger' : 'info'
+            });
+
+            saveSysData();
+            nextTick(()=> { if(chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight; });
+          }
+        };
+        ws.onclose = () => { wsConnected.value = false; setTimeout(connectWs, 3000); };
+      };
+
+      const sendMessage = () => {
+        if (!inputText.value.trim() || !wsConnected.value) return;
+
+        let payloadChannel = dashActiveGroup.value === 'global' ? 'global' : 'group';
+        let payloadTarget = dashActiveGroup.value === 'global' ? null : dashActiveGroup.value;
+
+        ws.send(JSON.stringify({
+          type: isSosMode.value ? 'sos_chat' : 'chat',
+          sender: '导演组', channel: payloadChannel, targetGroup: payloadTarget, content: inputText.value.trim()
+        }));
+        inputText.value = '';
+      };
+
+      const fetchStaffFromCloud = async () => {
+        try {
+          const res = await fetchWithAuth('/api/staff');
+          if (res.ok) {
+            const data = await res.json();
+            if(data && data.length > 0) {
+              const oldUsers = users.value || [];
+              users.value = data.map(u => {
+                const oldU = oldUsers.find(x => x.id === u.id);
+                return {...u, online: oldU ? oldU.online : false, lastSeen: oldU ? oldU.lastSeen : 0, perms: u};
+              });
+              saveUsersData();
+            }
+          }
+        } catch (e) {}
+      };
+
+      const initSystem = () => {
+        if(localStorage.getItem('admin_token')) {
+          isLogged.value = true;
+          fetchContestants(); fetchTacticsData(); fetchPendingStaff(); fetchStaffFromCloud();
+          if(!wsConnected.value) connectWs();
+        }
+      };
+
+      onMounted(() => {
+        checkLogin();
+        setInterval(() => {
+          if (isLogged.value) {
+            fetchContestants();
+            fetchPendingStaff();
+          }
+        }, 10000);
+      });
+
+      return {
+        isLogged, isLoggingIn, adminPwd, doLogin, doLogout,
+        activeTab, wsConnected, chatBox, isSosMode, toggleSosChannel, inputText, sendMessage,
+        sysModal, customAlert, customConfirm, showToast, clearAllLogs,
+        deviceErrorModal, ackDeviceError, sosDetailsModal, openSosDetails, atGroupModal, selectAtGroup,
+        groups, groupOptions, groupOptionsWithAll, dragStart, dragOver, dragLeave, drop, getGroupOnlineStats, getGroupOnlineCountObj, addGroup, deleteGroup, newGroupName,
+        users, approvedUsers, newUser, newUserLevelOptions, addUser, deleteUser, deleteLevel1User, saveUsersData, updateStaffInfo,
+        messages, logs, recentLogs, dashActiveGroup, dashFilteredMessages,
+        ctrlFilterGroup, ctrlFilteredAndSortedUsers, sendSingleAction, bulkAction,
+        activeTasks, newTask, issueTask, forceCompleteTask, deleteTask, taskTargetOptions,
+        staffFilterGroup, staffFilteredAndSortedUsers,
+        activeContestant, nextContestant, parsedActiveContestants, parsedNextContestants, latestMicReport, reportHighlight, mics, newMic, addCustomMic, deleteMic, resolveBrokenMic, saveMicsData, handleMicHolderChange, toggleMicActive, contestants, micHolderOptions,
+        stageHosts, newHostName, addHost, deleteHost,
+        pendingStaff, approveStaff, rejectStaff, resetPwd
+      };
+    }
+  });
+
+  app.component('cyber-select', CyberSelect);
+  app.mount('#app');
+</script>
+</body>
+</html>

@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>星裁系统 · 学生干部平台</title>
+    <script src="https://cdn.staticfile.net/echarts/5.5.0/echarts.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: #000000; --card-glass: rgba(28, 28, 30, 0.65); --card-border: rgba(255, 255, 255, 0.08);
+            --apple-blue: #0A84FF; --apple-orange: #FF9F0A; --apple-red: #FF453A; --apple-green: #32D74B;
+            --text-main: #FFFFFF; --text-sub: #EBEBF599;
+            --font-family-base: -apple-system, "SF Pro Display", sans-serif;
+            --font-family-kaiti: 'KaiTi', 'STKaiti', 'BiauKai', serif;
+        }
+        body { margin: 0; background-color: var(--bg-dark); color: var(--text-main); font-family: var(--font-family-base); height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; -webkit-font-smoothing: antialiased; transform: translateZ(0); }
+        .bg-layer { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; height: 100dvh; background: radial-gradient(circle at 50% -20%, #064e3b 0%, #000000 70%); z-index: -1; transition: background 0.5s ease; will-change: background; }
+
+        .header { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; padding-top: max(15px, env(safe-area-inset-top)); z-index: 100; }
+        .net-status { background: rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 20px; font-size: 12px; display: flex; align-items: center; gap: 6px; backdrop-filter: blur(10px); }
+        .net-dot { width: 8px; height: 8px; background: var(--apple-green); border-radius: 50%; box-shadow: 0 0 8px var(--apple-green); animation: pulse 2s infinite; }
+
+        .page-container { flex: 1; overflow-y: auto; padding: 0 15px; padding-bottom: 90px; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
+        .page { display: none; opacity: 0; transition: opacity 0.3s ease; flex-direction: column; gap: 15px; }
+        .page.active { display: flex; opacity: 1; animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .glass-card { background: var(--card-glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--card-border); border-radius: 24px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+
+        .live-info-box { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px 0; text-align: center; }
+        .live-status-badge { font-size: 14px; color: var(--apple-orange); font-weight: bold; margin-bottom: 12px; letter-spacing: 3px; text-transform: uppercase; }
+        .live-name { font-size: 42px; font-weight: 900; margin: 0 0 5px 0; letter-spacing: 2px; }
+        .live-class { color: #8E8E93; font-size: 16px; margin-bottom: 8px; }
+        .live-song { font-size: 20px; color: var(--apple-blue); margin: 0; font-weight: 600; }
+        .next-singer-box { display: block; margin-top: 15px; padding: 8px 15px; background: rgba(255,255,255,0.1); border-radius: 12px; color: var(--text-sub); font-size: 13px; }
+
+        .live-score-preview { margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px; display: flex; justify-content: space-around; }
+        .score-col { display: flex; flex-direction: column; align-items: center; }
+        .score-val { font-size: 28px; font-weight: 900; font-family: 'Consolas', monospace; margin-top: 4px; }
+
+        .module-title { font-size: 16px; font-weight: 700; margin-bottom: 15px; color: var(--text-sub); display: flex; justify-content: space-between; }
+        .mini-rank-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 14px; }
+        .mini-rank-row:last-child { border-bottom: none; }
+
+        .chart-box { width: 100%; height: 220px; min-height: 220px; }
+
+        .vote-display-box { text-align: center; margin-bottom: 20px; }
+        .vote-big-score { font-size: 75px; font-weight: 900; color: var(--apple-orange); font-family: 'Consolas', monospace; height: 90px; line-height: 90px; text-shadow: 0 0 20px rgba(255,159,10,0.4); }
+        .numpad-100 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 10px; }
+        .btn-num { background: rgba(255,255,255,0.1); border-radius: 16px; height: 60px; display: flex; justify-content: center; align-items: center; font-size: 28px; font-weight: 600; cursor: pointer; transition: 0.1s; border: 1px solid rgba(255,255,255,0.05); user-select: none; -webkit-tap-highlight-color: transparent;}
+        .btn-num:active { transform: scale(0.92); background: rgba(255,255,255,0.2); }
+
+        .numpad-10 { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; margin-top: 10px; }
+        .circle-btn { width: 65px; height: 65px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.15); font-size: 26px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: 0.2s; color: white; user-select: none; -webkit-tap-highlight-color: transparent;}
+        .circle-btn:active { transform: scale(0.9); }
+        .circle-btn.selected { background: var(--apple-green); border-color: var(--apple-green); transform: scale(1.05); box-shadow: 0 0 15px rgba(50,215,75,0.5); color: #000; }
+
+        .btn-submit { background: linear-gradient(135deg, #FF453A, #FF9F0A); color: white; border: none; border-radius: 16px; height: 65px; font-size: 20px; font-weight: bold; width: 100%; margin-top: 20px; box-shadow: 0 5px 15px rgba(255,69,58,0.4); transition: 0.2s; -webkit-tap-highlight-color: transparent;}
+        .btn-submit:active { transform: scale(0.96); }
+
+        .rank-item { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .rank-num { width: 30px; font-size: 20px; font-weight: 900; font-style: italic; color: var(--text-sub); }
+        .rank-name { flex: 1; font-size: 16px; font-weight: 600; display:flex; flex-direction:column; }
+        .rank-score { font-size: 18px; font-weight: bold; font-family: 'Consolas', monospace; color: var(--apple-blue); margin-right: 5px; }
+
+        .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(18, 18, 20, 0.85); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px); border-top: 0.5px solid rgba(255,255,255,0.15); display: flex; justify-content: space-around; padding: 10px 0; padding-bottom: max(10px, env(safe-area-inset-bottom)); z-index: 999; transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); will-change: transform;}
+        .nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; color: #8E8E93; font-size: 11px; font-weight: 600; transition: 0.2s; width: 60px; cursor: pointer; -webkit-tap-highlight-color: transparent;}
+        .nav-item.active { color: #FFFFFF; transform: scale(1.05); }
+        .nav-icon { font-size: 22px; }
+
+        #cadre-login-mask { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; height: 100dvh; background: rgba(0,0,0,0.9); z-index: 99999; display: none; flex-direction: column; justify-content: center; align-items: center; backdrop-filter: blur(20px); }
+        .cadre-input { width: 80%; max-width: 300px; padding: 15px; margin-bottom: 15px; border-radius: 12px; border: 1px solid rgba(50,215,75,0.5); background: rgba(0,0,0,0.5); color: white; font-size: 16px; text-align: center; outline: none; -webkit-appearance: none;}
+        .cadre-btn { width: 80%; max-width: 300px; padding: 15px; border-radius: 12px; font-weight: bold; font-size: 16px; border: none; cursor: pointer; margin-bottom: 10px;}
+
+        /* =========================================================
+            🚨新增：量子浮现特效 (开屏动画与强锁通用)
+        ========================================================= */
+        @keyframes quantumFadeIn {
+            0% { transform: scale(0.1); opacity: 0; filter: blur(20px) drop-shadow(0 0 0px rgba(10,132,255,0)); }
+            50% { transform: scale(1.1); opacity: 0.9; filter: blur(2px) drop-shadow(0 0 40px rgba(10,132,255,0.8)); }
+            100% { transform: scale(1); opacity: 1; filter: blur(0px) drop-shadow(0 0 15px rgba(10,132,255,0.4)); }
+        }
+
+        @keyframes unfoldCenter { 0% { clip-path: inset(0 50% 0 50%); opacity: 0; transform: scale(0.9); } 100% { clip-path: inset(0 0 0 0); opacity: 1; transform: scale(1); } }
+        @keyframes fadeIn { 0% { opacity: 0; } 100% { opacity: 1; } }
+
+        /* ================= 震撼开屏动画样式 ================= */
+        #splash-screen {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; height: 100dvh;
+            background-color: #000000; z-index: 9999999; display: flex; flex-direction: column;
+            justify-content: space-between; align-items: center; transition: opacity 0.8s ease-out;
+        }
+        .splash-main { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; margin-top: -10vh; }
+        .splash-logo { width: 140px; margin-bottom: 25px; animation: quantumFadeIn 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+        .splash-title-zh { font-family: var(--font-family-kaiti); color: #FFFFFF; font-size: 26px; letter-spacing: 4px; margin-bottom: 8px; animation: unfoldCenter 1.5s cubic-bezier(0.25, 1, 0.5, 1) forwards; white-space: nowrap; }
+        .splash-title-en { font-family: var(--font-family-base); color: rgba(255, 255, 255, 0.6); font-size: 11px; letter-spacing: 3px; text-transform: uppercase; animation: unfoldCenter 1.5s cubic-bezier(0.25, 1, 0.5, 1) forwards; animation-delay: 0.2s; opacity: 0; white-space: nowrap; }
+        .splash-footer { font-family: var(--font-family-kaiti); color: rgba(255, 255, 255, 0.3); font-size: 14px; letter-spacing: 6px; padding-bottom: max(40px, env(safe-area-inset-bottom)); animation: fadeIn 2s ease-in forwards; }
+
+        /* ================= 强锁界面定制 ================= */
+        #emergency-lock-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; height: 100dvh; background: #000000; z-index: 999999; display: none; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; box-sizing: border-box; }
+        .lock-container { display: flex; flex-direction: column; align-items: center; margin-top: -15vh; }
+        .lock-logo { width: 130px; margin-bottom: 35px; animation: quantumFadeIn 1.5s cubic-bezier(0.16, 1, 0.3, 1) infinite alternate; }
+        #emergency-lock-overlay h2 { font-family: var(--font-family-kaiti); color: #FFFFFF; font-size: 26px; margin-bottom: 15px; letter-spacing: 3px; font-weight: normal; animation: unfoldCenter 1.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;}
+        #emergency-lock-overlay h1 { font-family: var(--font-family-base); color: #FF453A; font-size: 32px; letter-spacing: 5px; margin: 0; font-weight: 900; text-shadow: 0 0 20px rgba(255,69,58,0.5); animation: unfoldCenter 1.5s cubic-bezier(0.25, 1, 0.5, 1) forwards; animation-delay: 0.2s; opacity: 0; }
+
+        .toast { position: fixed; top: 40px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.95); color: black; padding: 12px 24px; border-radius: 30px; font-size: 14px; font-weight: bold; opacity: 0; transition: 0.3s; z-index: 9999999; box-shadow: 0 10px 20px rgba(0,0,0,0.2); pointer-events: none;}
+        .toast.show { opacity: 1; top: 60px; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(50, 215, 75, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(50, 215, 75, 0); } 100% { box-shadow: 0 0 0 0 rgba(50, 215, 75, 0); } }
+    </style>
+</head>
+<body>
+
+<div id="splash-screen">
+    <div></div>
+    <div class="splash-main">
+        <img src="assets/XCLOGO.webp" class="splash-logo" alt="LOGO" onerror="this.style.display='none'">
+        <div class="splash-title-zh">星裁系统·学生干部端</div>
+        <div class="splash-title-en">StarJudge · Cadre End</div>
+    </div>
+    <div class="splash-footer">宣甫 · 原創</div>
+</div>
+
+<div class="bg-layer" id="main-bg"></div>
+<div id="toast-container" class="toast">✅ 提示</div>
+
+<div id="emergency-lock-overlay">
+    <div class="lock-container">
+        <img src="assets/XCLOGO.webp" class="lock-logo" alt="LOGO" onerror="this.style.display='none'">
+        <h2>星裁系统·干部评委端</h2>
+        <h1>系统紧急安全熔断</h1>
+    </div>
+</div>
+
+<div id="cadre-login-mask">
+    <img src="assets/XCLOGO.webp" alt="LOGO" style="width: 130px; margin-bottom: 20px; animation: quantumFadeIn 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;" onerror="this.style.display='none'">
+
+    <h2 style="color: var(--apple-green); margin-bottom: 10px;">学生干部打分平台</h2>
+    <p style="color: #8E8E93; font-size: 14px; margin-bottom: 30px;">该通道仅对授权的学生干部开放</p>
+
+    <input type="text" id="cadre-name" class="cadre-input" placeholder="姓名">
+    <input type="text" id="cadre-stuid" class="cadre-input" placeholder="长学号">
+    <button class="cadre-btn" style="background: var(--apple-green); color: white;" onclick="loginCadre()">核验身份并登入</button>
+</div>
+
+<div class="header">
+    <div id="sys-title" style="font-size: 18px; font-weight: 800; letter-spacing: 1px; display:flex; align-items:center; color: var(--apple-green);">
+        🛡️ 干部专线
+        <button onclick="logoutCadre()" style="background:rgba(255,69,58,0.2); border:1px solid var(--apple-red); color:var(--apple-red); border-radius:12px; padding:4px 10px; font-size:12px; margin-left:10px; cursor:pointer;">注销</button>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center;">
+        <div class="net-status" onclick="manualRefresh()" style="cursor:pointer; background: rgba(10,132,255,0.2); border: 1px solid rgba(10,132,255,0.5); color: #fff;">
+            🔄 同步数据
+        </div>
+        <div class="net-status"><div class="net-dot" id="net-indicator"></div> <span id="net-text">连接中</span></div>
+    </div>
+</div>
+
+<div class="page-container">
+
+    <div id="page-vote" class="page">
+        <div class="glass-card" style="margin-top: 10px;">
+            <div style="text-align: center; color: var(--text-sub); font-size: 14px; margin-bottom: 10px;">当前正在为 <b id="vote-singer-name" style="color:white;">--</b> 打分</div>
+            <div class="vote-display-box"><div class="vote-big-score" id="vote-score-display">--</div></div>
+
+            <div class="numpad-100" id="numpad-100">
+                <div class="btn-num" onclick="press('1')">1</div><div class="btn-num" onclick="press('2')">2</div><div class="btn-num" onclick="press('3')">3</div>
+                <div class="btn-num" onclick="press('4')">4</div><div class="btn-num" onclick="press('5')">5</div><div class="btn-num" onclick="press('6')">6</div>
+                <div class="btn-num" onclick="press('7')">7</div><div class="btn-num" onclick="press('8')">8</div><div class="btn-num" onclick="press('9')">9</div>
+                <div class="btn-num" onclick="myScore=''; updateDisplay();" style="color:var(--apple-red); font-size: 16px;">清空</div>
+                <div class="btn-num" onclick="press('0')">0</div>
+                <div class="btn-num" onclick="myScore=myScore.slice(0,-1); updateDisplay();" style="font-size: 16px;">删除</div>
+            </div>
+
+            <div class="numpad-10" id="numpad-10" style="display: none;">
+                <div class="circle-btn" onclick="directScore('1', this)">1</div><div class="circle-btn" onclick="directScore('2', this)">2</div>
+                <div class="circle-btn" onclick="directScore('3', this)">3</div><div class="circle-btn" onclick="directScore('4', this)">4</div>
+                <div class="circle-btn" onclick="directScore('5', this)">5</div><div class="circle-btn" onclick="directScore('6', this)">6</div>
+                <div class="circle-btn" onclick="directScore('7', this)">7</div><div class="circle-btn" onclick="directScore('8', this)">8</div>
+                <div class="circle-btn" onclick="directScore('9', this)">9</div><div class="circle-btn" onclick="directScore('10', this)">10</div>
+            </div>
+
+            <button class="btn-submit" id="btn-submit-vote" onclick="doSubmitVote()">提交分数</button>
+        </div>
+    </div>
+
+    <div id="page-home" class="page active">
+        <div class="glass-card">
+            <div class="live-info-box">
+                <div class="live-status-badge">LIVE 正在演唱</div>
+                <div class="live-name" id="home-name">等待开场</div>
+                <div class="live-class" id="home-class">---</div>
+                <div class="live-song" id="home-song">《未知曲目》</div>
+                <div id="home-next-singer" class="next-singer-box">👉 下一位：等待中</div>
+            </div>
+            <div class="live-score-preview" id="home-preview-box">
+                <div class="score-col"><span style="font-size:12px; color:var(--text-sub);">专业打分</span><span class="score-val" style="color:var(--apple-blue);" id="home-judge-score">--</span></div>
+                <div class="score-col"><span style="font-size:12px; color:var(--text-sub);">大众打分</span><span class="score-val" style="color:var(--apple-orange);" id="home-student-score">--</span></div>
+            </div>
+        </div>
+
+        <div class="glass-card" id="mini-rank-card">
+            <div class="module-title"><span>📋 干部组内打分参考 (当前选手)</span></div>
+            <div id="mini-rank-container"><div style="text-align: center; color: #666; font-size: 13px; padding: 10px 0;">请等待选手登台</div></div>
+        </div>
+
+        <div class="glass-card" id="home-chart-card">
+            <div class="module-title"><span id="chart-title">📊 数据比对 (大众 vs 干部)</span></div>
+            <div id="home-chart" class="chart-box"></div>
+        </div>
+    </div>
+
+    <div id="page-rank" class="page">
+        <div class="glass-card">
+            <div class="module-title" style="font-size: 20px;">🏆 终极赛果总榜</div>
+            <div id="full-rank-container"><div style="text-align: center; color: #666; font-size: 13px; padding: 30px 0;">比赛尚未产生分数</div></div>
+        </div>
+
+        <div class="glass-card" style="margin-top: 15px;">
+            <div class="module-title"><span>📈 全场战力走势分析</span></div>
+            <div id="rank-trend-chart" class="chart-box"></div>
+        </div>
+    </div>
+
+</div>
+
+<div class="bottom-nav" id="bottom-nav">
+    <div class="nav-item" onclick="switchTab('vote', this)" id="nav-vote"><div class="nav-icon">🗳️</div>投票</div>
+    <div class="nav-item active" onclick="switchTab('home', this)" id="nav-home"><div class="nav-icon">🏠</div>主页</div>
+    <div class="nav-item" onclick="switchTab('rank', this)" id="nav-rank"><div class="nav-icon">🏆</div>榜单</div>
+</div>
+
+<script>
+    // 🚨 核心网络重构：兼容 Tauri 桌面端与 HTTPS 浏览器强制加密
+    const currentProtocol = window.location.protocol;
+    const currentHostname = window.location.hostname;
+
+    const isDesktopApp = currentProtocol === 'file:' ||
+        currentProtocol.includes('tauri') ||
+        currentHostname.includes('tauri') ||
+        currentHostname === 'localhost' ||
+        currentHostname === '127.0.0.1';
+
+    const host = isDesktopApp ? "https://xuanfu.asia" : currentProtocol + '//' + window.location.host;
+    const wsUrl = isDesktopApp ? "wss://xuanfu.asia/ws/screen" : (currentProtocol === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/ws/screen';
+
+    const domBottomNav = document.getElementById('bottom-nav');
+    const domEmergencyLock = document.getElementById('emergency-lock-overlay');
+    const domVoteScore = document.getElementById('vote-score-display');
+    const domSubmitBtn = document.getElementById('btn-submit-vote');
+
+    let currentId = null; let myScore = ""; let sysScale = 100;
+    let homeChartInst = null; let rankChartInst = null;
+    let allContestantsData = []; let isForceVoting = false;
+    let isEmergencyLocked = false;
+
+    let cadreName = localStorage.getItem('cadre_name') || '';
+    let cadreId = localStorage.getItem('cadre_id') || '';
+    let finalDeviceId = `CADRE_${cadreId}_${cadreName}`;
+
+    function showToast(msg) { const t = document.getElementById('toast-container'); t.innerText = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2500); }
+
+    function manualRefresh() {
+        showToast("正在拉取最新现场数据...");
+        fetchSystemData();
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            if(wsHeartbeat) clearInterval(wsHeartbeat);
+            connectWS();
+        }
+    }
+
+    async function loginCadre() {
+        const n = document.getElementById('cadre-name').value.trim();
+        const id = document.getElementById('cadre-stuid').value.trim() || '-';
+        if(!n) return showToast("必须填写真实姓名以便溯源");
+
+        const targetName = `CADRE_${id}_${n}`;
+
+        try {
+            const judgeRes = await fetch(`${host}/api/judges`);
+            if(!judgeRes.ok) return showToast("无法连接指挥中心核验数据库");
+            const allJudges = await judgeRes.json();
+
+            const isAuthorized = allJudges.some(j => j.name === targetName);
+            if (!isAuthorized) {
+                return showToast("⛔ 登入拒绝：您的身份未被指挥中心登记授权！");
+            }
+        } catch(e) {
+            return showToast("核验网络异常，请重试");
+        }
+
+        try {
+            const onlineRes = await fetch(`${host}/api/scores/online-cadres`);
+            const onlineIds = await onlineRes.json();
+            if (onlineIds && onlineIds.includes(targetName)) {
+                return showToast("🚨 该账号已被其他设备抢占登录！");
+            }
+        } catch(e) {}
+
+        localStorage.setItem('cadre_name', n);
+        localStorage.setItem('cadre_id', id);
+        location.reload();
+    }
+
+    function logoutCadre() { localStorage.removeItem('cadre_name'); localStorage.removeItem('cadre_id'); location.reload(); }
+
+    function switchTab(targetId, el) {
+        let hasVotedForCurrent = localStorage.getItem('voted_' + currentId) === 'true';
+        if (isForceVoting && targetId !== 'vote' && !hasVotedForCurrent) {
+            return showToast("⚠️ 请先完成当前选手的打分！");
+        }
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        document.getElementById('page-' + targetId).classList.add('active'); if(el) el.classList.add('active'); else document.getElementById('nav-' + targetId).classList.add('active');
+        if (targetId === 'home' && homeChartInst) homeChartInst.resize(); if (targetId === 'rank' && rankChartInst) rankChartInst.resize();
+    }
+
+    function updateScaleUI() {
+        if(sysScale === 10) { document.getElementById('numpad-100').style.display = 'none'; document.getElementById('numpad-10').style.display = 'flex'; }
+        else { document.getElementById('numpad-100').style.display = 'grid'; document.getElementById('numpad-10').style.display = 'none'; }
+        myScore = ""; updateDisplay(); document.querySelectorAll('.circle-btn').forEach(b => b.classList.remove('selected'));
+    }
+
+    function checkEmergencyLock(conf) {
+        isEmergencyLocked = conf.lockCadre;
+        domEmergencyLock.style.display = isEmergencyLocked ? 'flex' : 'none';
+    }
+
+    async function fetchSystemData() {
+        if(!cadreName) return;
+        try {
+            const confRes = await fetch(`${host}/api/scores/config?deviceId=${finalDeviceId}&isCadre=true`);
+            const conf = await confRes.json();
+
+            sysScale = conf.scoreScale; updateScaleUI(); checkEmergencyLock(conf);
+
+            const conRes = await fetch(`${host}/api/admin/contestants`);
+            allContestantsData = await conRes.json();
+
+            const detailsPromises = allContestantsData.map(item => fetch(`${host}/api/scores/details/${item.id}`).then(r => r.json()));
+            const allDetails = await Promise.all(detailsPromises);
+            allContestantsData.forEach(c => c.details = allDetails.find(d => d.length > 0 && d[0].contestantId === c.id) || []);
+
+            if (conf.activeContestantId != null && conf.activeContestantId !== 0) {
+                currentId = conf.activeContestantId;
+                const currentSinger = allContestantsData.find(c => c.id == currentId);
+
+                if (currentSinger) {
+                    document.getElementById('home-name').innerText = currentSinger.name || "--";
+                    document.getElementById('home-song').innerText = currentSinger.songName ? `《${currentSinger.songName}》` : "《未知曲目》";
+                    document.getElementById('home-class').innerText = currentSinger.className || '';
+                    document.getElementById('vote-singer-name').innerText = currentSinger.name || "--";
+
+                    const seq = [...allContestantsData].sort((a,b)=>a.id-b.id);
+                    const curIdx = seq.findIndex(c=>c.id==currentId);
+                    if(curIdx!==-1 && curIdx+1 < seq.length) {
+                        document.getElementById('home-next-singer').innerText = `👉 下一位：${seq[curIdx+1].name}`;
+                        document.getElementById('home-next-singer').style.display = 'block';
+                    } else {
+                        document.getElementById('home-next-singer').innerText = `👉 下一位：无`;
+                        document.getElementById('home-next-singer').style.display = 'block';
+                    }
+
+                    if(localStorage.getItem('voted_' + currentId) === 'true') {
+                        domSubmitBtn.innerText = "✅ 已完成打分";
+                        domSubmitBtn.style.background = "var(--apple-green)";
+                        domSubmitBtn.disabled = true;
+                    } else {
+                        domSubmitBtn.innerText = "提交分数";
+                        domSubmitBtn.style.background = "linear-gradient(135deg, #FF453A, #FF9F0A)";
+                        domSubmitBtn.disabled = false;
+                    }
+
+                    // 👉 核心修复：如果是中途进来的，且投票已经开启，并且自己没投过票，直接拉起到投票页面
+                    if (conf.isVotingOpen && localStorage.getItem('voted_' + currentId) !== 'true') {
+                        isForceVoting = true;
+                        switchTab('vote');
+                        domBottomNav.style.transform = 'translateY(100%)';
+                    } else {
+                        isForceVoting = false;
+                        switchTab('home');
+                    }
+                }
+            } else {
+                currentId = null;
+                document.getElementById('home-name').innerText = "等待开场";
+                document.getElementById('home-song').innerText = "《未知曲目》";
+                document.getElementById('home-class').innerText = "---";
+                document.getElementById('home-next-singer').innerText = "👉 下一位：等待中";
+                document.getElementById('vote-singer-name').innerText = "--";
+            }
+
+            renderRankings();
+            updateCurrentScoreDisplay();
+
+            if(typeof echarts !== 'undefined') renderCharts();
+        } catch (e) {
+            console.error("数据拉取异常", e);
+        }
+    }
+
+    function updateCurrentScoreDisplay() {
+        if (!currentId) {
+            document.getElementById('home-judge-score').innerText = '--';
+            document.getElementById('home-student-score').innerText = '--';
+            return;
+        }
+        const cSinger = allContestantsData.find(c => c.id == currentId);
+        if (cSinger && cSinger.finalScore > 0) {
+            document.getElementById('home-judge-score').innerText = cSinger.judgeAvgScore ? cSinger.judgeAvgScore.toFixed(2) : '--';
+            document.getElementById('home-student-score').innerText = cSinger.studentAvgScore ? cSinger.studentAvgScore.toFixed(2) : '--';
+        } else {
+            document.getElementById('home-judge-score').innerText = '--';
+            document.getElementById('home-student-score').innerText = '--';
+        }
+    }
+
+    function renderRankings() {
+        const scored = allContestantsData.filter(c => c.finalScore > 0).sort((a,b) => b.finalScore - a.finalScore);
+        const miniBox = document.getElementById('mini-rank-container');
+
+        if(!currentId) miniBox.innerHTML = '<div style="text-align: center; color: #666; font-size: 13px; padding: 10px 0;">请等待选手登台</div>';
+        else {
+            const cSinger = allContestantsData.find(c => c.id == currentId);
+            const cadreScores = (cSinger?.details || []).filter(d => d.judgeType === 'JUDGE' && d.judgeName.startsWith('CADRE_'));
+            if(cadreScores.length === 0) miniBox.innerHTML = '<div style="text-align: center; color: #666; font-size: 13px; padding: 10px 0;">暂无其他干部打分</div>';
+            else miniBox.innerHTML = cadreScores.map(d => `<div class="mini-rank-row"><span>🧑‍🎓 ${d.judgeName.split('_')[2] || d.judgeName}</span><span style="color:var(--apple-green); font-weight:bold;">${d.scoreValue}分</span></div>`).join('');
+        }
+
+        const fullBox = document.getElementById('full-rank-container');
+        if(scored.length === 0) fullBox.innerHTML = '<div style="text-align: center; color: #666; font-size: 13px; padding: 30px 0;">比赛尚未产生分数</div>';
+        else fullBox.innerHTML = scored.map((c, i) => `<div class="rank-item"><div class="rank-num">${i+1}</div><div class="rank-name"><span>${c.name}</span> <span style="font-size:11px; color:#8E8E93; font-weight:normal;">${c.className||''}</span></div><div class="rank-score">${c.finalScore.toFixed(2)}</div></div>`).join('');
+    }
+
+    function renderCharts() {
+        if (typeof echarts === 'undefined') return;
+        const scored = allContestantsData.filter(c => c.finalScore > 0).sort((a,b)=>a.id-b.id);
+
+        if (!homeChartInst) homeChartInst = echarts.init(document.getElementById('home-chart'));
+        if (!rankChartInst) rankChartInst = echarts.init(document.getElementById('rank-trend-chart'));
+
+        if(scored.length === 0) {
+            const emptyOpt = { title: { text: '等待比赛数据产生...', left: 'center', top: 'center', textStyle: { color: '#666', fontSize: 14, fontWeight: 'normal' } } };
+            homeChartInst.setOption(emptyOpt, true);
+            rankChartInst.setOption(emptyOpt, true);
+            return;
+        }
+
+        let cadreAvgs = scored.map(c => { let cS = (c.details||[]).filter(d=>d.judgeType==='JUDGE' && d.judgeName.startsWith('CADRE_')); return cS.length ? (cS.reduce((sum,d)=>sum+d.scoreValue,0)/cS.length).toFixed(2) : 0; });
+        let option1 = { backgroundColor: 'transparent', tooltip: { trigger: 'axis' }, legend: { data: ['大众均分', '干部均分'], textStyle: { color: '#fff' }, top: 0 }, grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true }, xAxis: { type: 'category', data: scored.map(c=>c.name), axisLabel: {color: '#8E8E93'} }, yAxis: { type: 'value', min: 'dataMin', splitLine: {lineStyle: {color: 'rgba(255,255,255,0.05)'}}, axisLabel:{color:'#8E8E93'} }, series: [ { name: '大众均分', type: 'line', smooth: true, itemStyle: {color: '#FF9F0A'}, data: scored.map(c=>c.studentAvgScore) }, { name: '干部均分', type: 'line', smooth: true, itemStyle: {color: '#32D74B'}, data: cadreAvgs } ] };
+        homeChartInst.setOption(option1, true);
+
+        rankChartInst.setOption({ backgroundColor: 'transparent', tooltip: { trigger: 'axis' }, grid: { left: '3%', right: '4%', bottom: '5%', top: '5%', containLabel: true }, xAxis: { type: 'category', boundaryGap: false, data: scored.map(c=>c.name), axisLabel: {color: '#8E8E93'} }, yAxis: { type: 'value', min: 'dataMin', splitLine: {lineStyle: {color: 'rgba(255,255,255,0.05)'}}, axisLabel:{color:'#8E8E93'} }, series: [{ type: 'line', smooth: true, itemStyle: {color: '#0A84FF'}, areaStyle: {color: 'rgba(10,132,255,0.2)'}, data: scored.map(c=>c.finalScore) }] }, true);
+    }
+
+    function updateDisplay() { domVoteScore.innerText = myScore === "" ? "--" : myScore; }
+
+    function press(n) {
+        if(myScore === "" && n === "0") return;
+        if(myScore === "100") return;
+        if(myScore.length >= 2 && myScore !== "10") return;
+
+        let newScore = myScore + n;
+        if(parseInt(newScore) > sysScale) return showToast(`本场最高为 ${sysScale} 分`);
+        myScore = newScore; updateDisplay();
+    }
+
+    function directScore(n, el) {
+        myScore = n.toString(); updateDisplay();
+        document.querySelectorAll('.circle-btn').forEach(b => b.classList.remove('selected')); el.classList.add('selected');
+    }
+
+    async function doSubmitVote() {
+        if (isEmergencyLocked) return showToast("🚨 通道已锁死");
+        if (!currentId) return showToast("暂无选手演唱");
+        if (myScore === "") return showToast("请输入分数");
+
+        const payload = { contestantId: currentId, judgeName: finalDeviceId, score: parseInt(myScore), judgeType: 'JUDGE', deviceId: finalDeviceId };
+        domSubmitBtn.innerText = "提交中..."; domSubmitBtn.disabled = true;
+        try {
+            const res = await fetch(host + '/api/scores/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (!res.ok) { showToast(await res.text()); domSubmitBtn.innerText = "提交分数"; domSubmitBtn.disabled = false; return; }
+
+            showToast("干部提交成功！");
+            localStorage.setItem('voted_' + currentId, 'true');
+            domSubmitBtn.innerText = "✅ 已完成打分"; domSubmitBtn.style.background = "var(--apple-green)";
+
+            domBottomNav.style.transform = 'translateY(0)';
+            fetchSystemData();
+            setTimeout(() => { switchTab('home'); }, 800);
+        } catch(e) { showToast("网络异常"); domSubmitBtn.innerText = "提交分数"; domSubmitBtn.disabled = false; }
+    }
+
+    let ws = null; let wsHeartbeat = null;
+    function connectWS() {
+        ws = new WebSocket(wsUrl);
+        ws.onopen = () => {
+            document.getElementById('net-indicator').style.background = 'var(--apple-green)'; document.getElementById('net-text').innerText = '在线连接中';
+            if(wsHeartbeat) clearInterval(wsHeartbeat);
+            wsHeartbeat = setInterval(() => {
+                if(ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'PING', role: 'CADRE', deviceId: finalDeviceId }));
+                }
+            }, 5000);
+        };
+        ws.onmessage = async (e) => {
+            try {
+                const cmd = JSON.parse(e.data);
+                if (cmd.type === 'SHOW_SINGER') {
+                    currentId = cmd.data.id;
+                    document.getElementById('home-name').innerText = cmd.data.name || "--";
+                    document.getElementById('home-song').innerText = cmd.data.songName ? `《${cmd.data.songName}》` : "《未知曲目》";
+                    document.getElementById('home-class').innerText = cmd.data.className || '';
+                    document.getElementById('vote-singer-name').innerText = cmd.data.name || "--";
+
+                    myScore = ""; updateDisplay(); document.querySelectorAll('.circle-btn').forEach(b => b.classList.remove('selected'));
+
+                    if(localStorage.getItem('voted_' + currentId) === 'true') {
+                        domSubmitBtn.innerText = "✅ 已完成打分";
+                        domSubmitBtn.style.background = "var(--apple-green)";
+                        domSubmitBtn.disabled = true;
+                    } else {
+                        domSubmitBtn.disabled = false;
+                        domSubmitBtn.innerText = "提交分数";
+                        domSubmitBtn.style.background = "linear-gradient(135deg, #FF453A, #FF9F0A)";
+                    }
+
+                    updateCurrentScoreDisplay();
+
+                    if (!isForceVoting) switchTab('home');
+
+                    const seq = [...allContestantsData].sort((a,b)=>a.id-b.id);
+                    const curIdx = seq.findIndex(c=>c.id==currentId);
+                    if(curIdx!==-1 && curIdx+1 < seq.length) {
+                        document.getElementById('home-next-singer').innerText = `👉 下一位：${seq[curIdx+1].name}`;
+                        document.getElementById('home-next-singer').style.display = 'block';
+                    } else {
+                        document.getElementById('home-next-singer').innerText = `👉 下一位：无`;
+                        document.getElementById('home-next-singer').style.display = 'block';
+                    }
+
+                    document.getElementById('mini-rank-container').innerHTML = '<div style="text-align: center; color: #666; font-size: 13px; padding: 10px 0;">等待其他干部打分...</div>';
+                }
+                else if (cmd.type === 'SET_NEXT_SINGER') {
+                    document.getElementById('home-next-singer').innerText = `👉 下一位：${cmd.data.name}`;
+                    document.getElementById('home-next-singer').style.display = 'block';
+                    showToast("后台已指定下一位候场选手");
+                }
+                else if (cmd.type === 'FORCE_VOTE_START' || cmd.type === 'START_COUNTDOWN') {
+                    isForceVoting = true; switchTab('vote');
+                    if(localStorage.getItem('voted_' + currentId) !== 'true') domBottomNav.style.transform = 'translateY(100%)';
+                }
+                else if (cmd.type === 'FORCE_VOTE_STOP') {
+                    isForceVoting = false; domBottomNav.style.transform = 'translateY(0)'; fetchSystemData();
+                }
+                else if (cmd.type === 'PUBLISH_SCORE') {
+                    if (currentId == cmd.data.id) {
+                        document.getElementById('home-judge-score').innerText = (cmd.data.judgeAvgScore || 0).toFixed(2);
+                        document.getElementById('home-student-score').innerText = (cmd.data.studentAvgScore || 0).toFixed(2);
+                    }
+                    fetchSystemData();
+                }
+                else if (cmd.type === 'SCALE_CHANGED') {
+                    sysScale = cmd.scale; updateScaleUI(); showToast(`赛制已动态切换为 ${sysScale} 分制`);
+                }
+                else if (cmd.type === 'EMERGENCY_LOCK') {
+                    if (cmd.target === 'ALL' || cmd.target === 'CADRE') {
+                        isEmergencyLocked = cmd.isLocked;
+                        document.getElementById('emergency-lock-overlay').style.display = isEmergencyLocked ? 'flex' : 'none';
+                    }
+                }
+                else if (cmd.type === 'KICK_CADRE') {
+                    if (cmd.deviceId === finalDeviceId) {
+                        showToast("🚨 您已被指挥中心强制剥夺干部权限！");
+                        setTimeout(logoutCadre, 2000);
+                    }
+                }
+            } catch (err) {
+                console.error("WS Parse Error:", err);
+            }
+        };
+        ws.onclose = () => {
+            document.getElementById('net-indicator').style.background = '#FF453A'; document.getElementById('net-text').innerText = '断线重连中';
+            if(wsHeartbeat) clearInterval(wsHeartbeat); setTimeout(connectWS, 3000);
+        };
+    }
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            fetchSystemData();
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                if(wsHeartbeat) clearInterval(wsHeartbeat);
+                connectWS();
+            }
+        }
+    });
+
+    // 👉 核心防崩防静默机制与开屏控制
+    window.onload = () => {
+        const splashScreen = document.getElementById('splash-screen');
+        const hideSplash = () => {
+            if (splashScreen) {
+                setTimeout(() => {
+                    splashScreen.style.opacity = '0';
+                    setTimeout(() => { splashScreen.style.display = 'none'; }, 800);
+                }, 1000);
+            }
+        };
+
+        if(!cadreName) {
+            document.getElementById('cadre-login-mask').style.display = 'flex';
+            hideSplash();
+        } else {
+            document.getElementById('cadre-login-mask').style.display = 'none';
+            fetchSystemData().then(hideSplash);
+            connectWS();
+        }
+    };
+</script>
+</body>
+</html>
